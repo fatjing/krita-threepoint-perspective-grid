@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=threepoint_perspective_grid
+X-Python-2-Compatible=false
+X-Krita-Manual=Manual.html
+Name=Three-Point Perspective Grid
+Comment=Create a 3-point perspective grid on a new vector layer
