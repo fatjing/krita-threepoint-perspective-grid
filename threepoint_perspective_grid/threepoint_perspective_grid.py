@@ -8,13 +8,12 @@ from krita import Krita, Extension
 import math
 
 class ThreePointPerspectiveGridDialog(QDialog):
-    def __init__(self, params, preview_callback=None):
-        super().__init__()
+    def __init__(self, params, preview_callback=None, parent=None):
+        super().__init__(parent)
         self.setWindowTitle("3-Point Perspective Grid")
         self.params = params
         self.preview_callback = preview_callback
 
-        # Timer to throttle preview updates
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
         self.preview_timer.timeout.connect(self.emit_preview)
@@ -112,8 +111,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
     def emit_preview(self):
         if self.isVisible() and self.preview_callback:
-            current_params = self.get_current_params()
-            self.preview_callback(current_params)
+            self.preview_callback(self.get_current_params())
 
     def get_current_params(self):
         return {
@@ -167,9 +165,11 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.doc = doc
         self.remove_preview_layer(doc)
 
+        main_window = Krita.instance().activeWindow().qwindow()
         self.current_dlg = ThreePointPerspectiveGridDialog(
             self.params,
-            preview_callback=self.update_preview
+            self.update_preview,
+            main_window
         )
         self.current_dlg.accepted.connect(lambda: self.on_dialog_accepted(self.doc))
         self.current_dlg.rejected.connect(self.on_dialog_rejected)
@@ -203,11 +203,6 @@ class ThreePointPerspectiveGridExtension(Extension):
     def update_preview(self, params):
         self.remove_preview_layer(self.doc)
         self.render_svg_to_layer(self.doc, params, "Perspective Grid (preview)")
-
-        # Refocus the dialog
-        if self.current_dlg and self.current_dlg.isVisible():
-            self.current_dlg.raise_()
-            self.current_dlg.activateWindow()
 
     def render_svg_to_layer(self, doc, params, layer_name):
         svg = self.build_svg(doc, params)
