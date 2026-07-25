@@ -223,7 +223,7 @@ class ThreePointPerspectiveGridExtension(Extension):
     def remove_grid_preview(self, doc):
         layer = self.get_vector_layer(doc, "Perspective Grid (Preview)")
         if layer is not None:
-            doc.rootNode().removeChildNode(layer)
+            layer.remove()
 
     def update_grid_preview(self, params):
         self.render_grid_to_layer(self.doc, params, "Perspective Grid (Preview)")
@@ -238,14 +238,12 @@ class ThreePointPerspectiveGridExtension(Extension):
         svg = self.build_svg(doc, params)
         layer = self.get_vector_layer(doc, layer_name)
         if layer is not None:
-            for shape in layer.shapes():
-                shape.remove()
-        else:
-            layer = doc.createVectorLayer(layer_name)
-            previous_node = doc.activeNode()
-            doc.rootNode().addChildNode(layer, None)
-            if previous_node:
-                doc.setActiveNode(previous_node)
+            layer.remove()
+        layer = doc.createVectorLayer(layer_name)
+        previous_node = doc.activeNode()
+        doc.rootNode().addChildNode(layer, None)
+        if previous_node:
+            doc.setActiveNode(previous_node)
         layer.addShapesFromSvg(svg)
 
     def build_svg(self, doc, params):
