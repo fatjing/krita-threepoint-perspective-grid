@@ -198,50 +198,55 @@ class ThreePointPerspectiveGridExtension(Extension):
             return
 
         self.doc = doc
-        self.remove_preview_layer(doc)
+        self.remove_grid_preview(doc)
 
         main_window = Krita.instance().activeWindow().qwindow()
-        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.update_preview, main_window)
-        self.current_dlg.accepted.connect(lambda: self.on_dialog_accepted(self.doc))
+        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.update_grid_preview, main_window)
+        self.current_dlg.accepted.connect(self.on_dialog_accepted)
         self.current_dlg.rejected.connect(self.on_dialog_rejected)
         self.current_dlg.finished.connect(self.on_dialog_finished)
         self.current_dlg.show()
 
-    def on_dialog_accepted(self, doc):
+    def on_dialog_accepted(self):
         self.current_dlg = None
-        # rename preview layer to final name, or create final grid if no preview
-        root = doc.rootNode()
-        for child in root.childNodes():
-            if child.name() == "Perspective Grid (preview)" and child.type() == "vectorlayer":
-                child.setName("Perspective Grid")
-                return
-        self.render_svg_to_layer(doc, self.params, "Perspective Grid")
+        layer = self.get_vector_layer(self.doc, "Perspective Grid (Preview)")
+        if layer is not None:
+            layer.setName("Perspective Grid")
 
     def on_dialog_rejected(self):
         self.current_dlg = None
-        self.remove_preview_layer(self.doc)
+        self.remove_grid_preview(self.doc)
 
     def on_dialog_finished(self):
         self.current_dlg = None
 
-    def remove_preview_layer(self, doc):
-        root = doc.rootNode()
-        for child in root.childNodes():
-            if child.name() == "Perspective Grid (preview)" and child.type() == "vectorlayer":
-                root.removeChildNode(child)
+    def remove_grid_preview(self, doc):
+        layer = self.get_vector_layer(doc, "Perspective Grid (Preview)")
+        if layer is not None:
+            doc.rootNode().removeChildNode(layer)
 
-    def update_preview(self, params):
-        self.remove_preview_layer(self.doc)
-        self.render_svg_to_layer(self.doc, params, "Perspective Grid (preview)")
+    def update_grid_preview(self, params):
+        self.render_grid_to_layer(self.doc, params, "Perspective Grid (Preview)")
 
-    def render_svg_to_layer(self, doc, params, layer_name):
+    def get_vector_layer(self, doc, layer_name):
+        for child in doc.rootNode().childNodes():
+            if child.name() == layer_name and child.type() == "vectorlayer":
+                return child
+        return None
+
+    def render_grid_to_layer(self, doc, params, layer_name):
         svg = self.build_svg(doc, params)
-        vector_layer = doc.createVectorLayer(layer_name)
-        vector_layer.addShapesFromSvg(svg)
-        previous_node = doc.activeNode()
-        doc.rootNode().addChildNode(vector_layer, None)
-        if previous_node:
-            doc.setActiveNode(previous_node)
+        layer = self.get_vector_layer(doc, layer_name)
+        if layer is not None:
+            for shape in layer.shapes():
+                shape.remove()
+        else:
+            layer = doc.createVectorLayer(layer_name)
+            previous_node = doc.activeNode()
+            doc.rootNode().addChildNode(layer, None)
+            if previous_node:
+                doc.setActiveNode(previous_node)
+        layer.addShapesFromSvg(svg)
 
     def build_svg(self, doc, params):
         lines = self.compute_grid_lines(params, doc.width(), doc.height())
