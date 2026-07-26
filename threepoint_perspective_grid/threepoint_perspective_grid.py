@@ -292,7 +292,6 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         cx = W / 2.0
         cy = H / 2.0
-        corners = [(0, 0), (W, 0), (W, H), (0, H)]
 
         # Focal length from horizontal FOV
         f = (W / 2.0) / math.tan(math.radians(fov / 2.0))
@@ -309,8 +308,8 @@ class ThreePointPerspectiveGridExtension(Extension):
             return [[c, -s, 0], [s, c, 0], [0, 0, 1]]
         R = mat_mat_mul(Rz(math.radians(-roll)), Rx(-math.radians(pitch)))
 
+        # Homogeneous projection of world direction D into image plane
         def project_direction(D):
-            """Homogeneous projection of world direction D into image plane."""
             v_cam = mat_vec_mul(R, list(D))
             vh = mat_vec_mul(K, v_cam)
             if abs(vh[2]) < 1e-12:
@@ -337,33 +336,21 @@ class ThreePointPerspectiveGridExtension(Extension):
         if show_rdvp:
             vp_positions["RDVP"] = project_direction(Drdvp)
 
-        # Clip a line through a point in a given direction to the canvas
-        def clip_line(x0, y0, dx, dy):
-            length = math.hypot(dx, dy)
-            if length < 1e-6:
-                return None
-            ux = dx / length
-            uy = dy / length
-            far1_x = x0 - 100000.0 * ux
-            far1_y = y0 - 100000.0 * uy
-            far2_x = x0 + 100000.0 * ux
-            far2_y = y0 + 100000.0 * uy
-            return liang_barsky_clip(far1_x, far1_y, far2_x, far2_y, 0, 0, W, H)
-
         # Gather rays for each VP
         vp_rays = {}
         for vp_name, vp in vp_positions.items():
             if vp[0] == float('inf') or vp[1] == float('inf'):
                 continue
-            min_ang, max_ang = visible_angle_range(vp, corners)
-            num_lines = density * 2 if (max_ang - min_ang) >= math.pi else density
-            step = (max_ang - min_ang) / num_lines
+            min_ang, max_ang = visible_angle_range(vp[0], vp[1], 0, 0, W, H)
+            span = max_ang - min_ang
+            num_lines = density * 2 if span >= math.pi - 1e-12 else density
+            step = span / num_lines
             segments = []
-            for i in range(num_lines + 1):
+            for i in range(num_lines):
                 ang = min_ang + i * step
                 dx = math.cos(ang)
                 dy = math.sin(ang)
-                clipped = clip_line(vp[0], vp[1], dx, dy)
+                clipped = clip_line(vp[0], vp[1], dx, dy, 0, 0, W, H)
                 if clipped:
                     segments.append(clipped)
             vp_rays[vp_name] = segments
@@ -371,15 +358,15 @@ class ThreePointPerspectiveGridExtension(Extension):
         # Horizon line
         vp1 = vp_positions["VP1"]
         vp2 = vp_positions["VP2"]
-        horizon = clip_line(vp1[0], vp1[1], vp2[0] - vp1[0], vp2[1] - vp1[1])
+        horizon = clip_line(vp1[0], vp1[1], vp2[0] - vp1[0], vp2[1] - vp1[1], 0, 0, W, H)
 
         # Vertical center line
         vp3 = vp_positions["VP3"]
         if vp3[0] != float('inf') and vp3[1] != float('inf'):
-            vertical_center = clip_line(cx, cy, vp3[0] - cx, vp3[1] - cy)
+            vertical_center = clip_line(cx, cy, vp3[0] - cx, vp3[1] - cy, 0, 0, W, H)
         else:
             v_up = mat_vec_mul(R, [0.0, 1.0, 0.0])
-            vertical_center = clip_line(cx, cy, v_up[0], v_up[1])
+            vertical_center = clip_line(cx, cy, v_up[0], v_up[1], 0, 0, W, H)
 
         return {
             "vp_rays": vp_rays,
@@ -390,36 +377,61 @@ class ThreePointPerspectiveGridExtension(Extension):
 
 # Geometry helpers
 
-def visible_angle_range(point, corners):
+def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     """Return (min_angle, max_angle) in radians covering the canvas from given point."""
-    px, py = point
-    xmin, ymin = corners[0]
-    xmax, ymax = corners[2]
-
-    if xmin <= px <= xmax and ymin <= py <= ymax:  # point inside rectangle
-        return 0.0, 2 * math.pi
+    EPS = 1e-12
+    # If the point is inside the canvas, all directions are visible
+    if (xmin - EPS <= x0 <= xmax + EPS and
+        ymin - EPS <= y0 <= ymax + EPS):
+        return 0, 2 * math.pi
 
     angles = []
+    corners = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)]
     for x, y in corners:
-        ang = math.atan2(y - py, x - px)
-        angles.append(ang if ang >= 0 else ang + 2 * math.pi)
+        ang = math.atan2(y - y0, x - x0)
+        angles.append(ang if ang >= 0 else ang + 2 * math.pi)    # normalise to [0, 2π)
     angles.sort()
+    # Duplicate the first angle + 2π to handle the wrap‑around gap
+    angles.append(angles[0] + 2 * math.pi)
 
-    max_gap = 0.0
-    gap_start = 0.0
+    max_gap = -1.0
+    max_gap_start = 0
     for i in range(4):
-        gap = angles[(i + 1) % 4] - angles[i]
-        if i == 3:
-            gap += 2 * math.pi
+        gap = angles[i + 1] - angles[i]
         if gap > max_gap:
             max_gap = gap
-            gap_start = angles[i]
+            max_gap_start = i
 
-    min_ang = (gap_start + max_gap) % (2 * math.pi)
-    max_ang = (min_ang + (2 * math.pi - max_gap)) % (2 * math.pi)
-    if max_ang < min_ang:
-        max_ang += 2 * math.pi
+    # The visible interval is the complement of the largest gap
+    min_ang = angles[max_gap_start + 1] - 2 * math.pi
+    max_ang = angles[max_gap_start]
     return min_ang, max_ang
+
+def clip_line(x0, y0, dx, dy, xmin, ymin, xmax, ymax):
+    """Clip a line through (x0, y0) with direction (dx, dy) to the canvas."""
+    length = math.hypot(dx, dy)
+    if length < 1e-12:
+        return None
+    ux = dx / length
+    uy = dy / length
+
+    # Compute the t values where the line reaches each of the four edges
+    t_values = []
+    if abs(ux) > 1e-12:
+        t_values.append((xmin - x0) / ux)      # left edge
+        t_values.append((xmax - x0) / ux)      # right edge
+    if abs(uy) > 1e-12:
+        t_values.append((ymin - y0) / uy)      # top edge
+        t_values.append((ymax - y0) / uy)      # bottom edge
+
+    if not t_values:
+        return None
+
+    max_abs_t = max(abs(t) for t in t_values)
+    half_length = max_abs_t * 1.1      # Extend by a small margin to avoid numerical misses at corners
+    end1 = (x0 - half_length * ux, y0 - half_length * uy)
+    end2 = (x0 + half_length * ux, y0 + half_length * uy)
+    return liang_barsky_clip(end1[0], end1[1], end2[0], end2[1], xmin, ymin, xmax, ymax)
 
 def liang_barsky_clip(x1, y1, x2, y2, xmin, ymin, xmax, ymax):
     """Clip line segment to rectangle."""
