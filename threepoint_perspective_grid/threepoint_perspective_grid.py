@@ -175,7 +175,7 @@ class ThreePointPerspectiveGridExtension(Extension):
                 "DVP":  QColor(243, 220, 133),
                 "LDVP": QColor(192, 234, 199),
                 "RDVP": QColor(175, 234, 234),
-                "HL":   QColor(206, 206, 206),
+                "HL":   QColor(189, 196, 203),
             },
         }
         self.current_dlg = None
@@ -318,12 +318,14 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         # Grid direction vectors (world space, Y-up, Z = view direction)
         a = math.radians(vp1_angle)
-        D1 = (-math.sin(a), 0, math.cos(a))                    # left grid lines
-        D2 = ( math.cos(a), 0, math.sin(a))                    # right grid lines (orthogonal)
-        D3 = (0, 1, 0)                                         # vertical (world up)
-        Ddvp = (D1[0] + D2[0], 0, D1[2] + D2[2])               # ground-plane diagonal
-        Dldvp = (D1[0] + D3[0], D1[1] + D3[1], D1[2] + D3[2])  # left-wall diagonal
-        Drdvp = (D2[0] + D3[0], D2[1] + D3[1], D2[2] + D3[2])  # right-wall diagonal
+        D1 = (-math.sin(a), 0, math.cos(a))              # left grid lines
+        D2 = ( math.cos(a), 0, math.sin(a))              # right grid lines (orthogonal)
+        D3 = (0, 1, 0)                                   # vertical (world up)
+        Ddvp = (D1[0] + D2[0], 0, D1[2] + D2[2])         # ground-plane diagonal
+
+        vertical_vec = -D3[1] if pitch > 0 else D3[1]    # whether wall diagonals point upward or downward
+        Dldvp = (D1[0], D1[1] + vertical_vec, D1[2])     # left-wall diagonal
+        Drdvp = (D2[0], D2[1] + vertical_vec, D2[2])     # right-wall diagonal
 
         vp_positions = {
             "VP1": project_direction(D1),
