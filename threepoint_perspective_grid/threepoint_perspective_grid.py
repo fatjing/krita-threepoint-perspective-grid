@@ -72,8 +72,9 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.fov_spin = QDoubleSpinBox()
         self.fov_spin.setRange(1, 179)
         self.fov_spin.setValue(self.params['fov'])
+        self.fov_spin.setSingleStep(5)
         self.fov_spin.setSuffix("°")
-        self.fov_spin.setToolTip("Horizontal field of view. Exactly spans the canvas width.")
+        self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner.")
         self.fov_spin.valueChanged.connect(self.request_preview)
         form.addRow("FOV", self.fov_spin)
 
@@ -161,7 +162,7 @@ class ThreePointPerspectiveGridExtension(Extension):
     def __init__(self, parent):
         super().__init__(parent)
         self.params = {
-            "vp1_angle": 15,
+            "vp1_angle": 30,
             "pitch": 0,
             "roll": 0,
             "fov": 78,
@@ -293,8 +294,8 @@ class ThreePointPerspectiveGridExtension(Extension):
         cx = W / 2.0
         cy = H / 2.0
 
-        # Focal length from horizontal FOV
-        f = (W / 2.0) / math.tan(math.radians(fov / 2.0))
+        # Focal length from diagonal field of view
+        f = (math.hypot(W, H) / 2.0) / math.tan(math.radians(fov / 2.0))
 
         # Intrinsic matrix K
         K = [[f, 0, cx], [0, f, cy], [0, 0, 1]]
