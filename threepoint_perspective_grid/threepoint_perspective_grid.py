@@ -78,13 +78,6 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.fov_spin.valueChanged.connect(self.request_preview)
         form.addRow("FOV", self.fov_spin)
 
-        # Grid density
-        self.grid_density = QSpinBox()
-        self.grid_density.setRange(2, 180)
-        self.grid_density.setValue(self.params['grid_density'])
-        self.grid_density.valueChanged.connect(self.request_preview)
-        form.addRow("Grid density", self.grid_density)
-
         # Vertical plane diagonals
         self.show_ldvp_check = QCheckBox("Show left wall diagonal")
         self.show_ldvp_check.setChecked(self.params["show_ldvp"])
@@ -95,6 +88,31 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.show_rdvp_check.setChecked(self.params["show_rdvp"])
         self.show_rdvp_check.stateChanged.connect(self.request_preview)
         form.addRow("", self.show_rdvp_check)
+
+        # Grid density
+        self.grid_density = QSpinBox()
+        self.grid_density.setRange(2, 180)
+        self.grid_density.setValue(self.params['grid_density'])
+        self.grid_density.valueChanged.connect(self.request_preview)
+        form.addRow("Grid density", self.grid_density)
+
+        # Line width
+        self.line_width_spin = QSpinBox()
+        self.line_width_spin.setRange(1, 20)
+        self.line_width_spin.setValue(self.params['line_width'])
+        self.line_width_spin.setToolTip("Stroke width for all grid lines (pixels).")
+        self.line_width_spin.valueChanged.connect(self.request_preview)
+        form.addRow("Line width", self.line_width_spin)
+
+        # Line opacity
+        self.line_opacity_spin = QDoubleSpinBox()
+        self.line_opacity_spin.setRange(0.0, 1.0)
+        self.line_opacity_spin.setValue(self.params['line_opacity'])
+        self.line_opacity_spin.setSingleStep(0.1)
+        self.line_opacity_spin.setDecimals(2)
+        self.line_opacity_spin.setToolTip("Opacity for all grid lines (0 = fully transparent, 1 = fully opaque).")
+        self.line_opacity_spin.valueChanged.connect(self.request_preview)
+        form.addRow("Line opacity", self.line_opacity_spin)
 
         # Color pickers
         self.colors = {target: color for target, color in self.params['colors'].items()}
@@ -147,9 +165,11 @@ class ThreePointPerspectiveGridDialog(QDialog):
             "pitch": self.pitch_spin.value(),
             "roll": self.roll_spin.value(),
             "fov": self.fov_spin.value(),
-            "grid_density": self.grid_density.value(),
             "show_ldvp": self.show_ldvp_check.isChecked(),
             "show_rdvp": self.show_rdvp_check.isChecked(),
+            "grid_density": self.grid_density.value(),
+            "line_width": self.line_width_spin.value(),
+            "line_opacity": self.line_opacity_spin.value(),
             "colors": self.colors
         }
 
@@ -166,9 +186,11 @@ class ThreePointPerspectiveGridExtension(Extension):
             "pitch": 0,
             "roll": 0,
             "fov": 78,
-            "grid_density": 12,
             "show_ldvp": False,
             "show_rdvp": False,
+            "grid_density": 12,
+            "line_width": 1,
+            "line_opacity": 1.0,
             "colors": {
                 "VP1":  QColor(172, 184, 255),
                 "VP2":  QColor(172, 184, 255),
@@ -250,6 +272,8 @@ class ThreePointPerspectiveGridExtension(Extension):
     def build_svg(self, doc, params):
         lines = self.compute_grid_lines(params, doc.width(), doc.height())
         colors = params["colors"]
+        width = params["line_width"]
+        opacity = params["line_opacity"]
 
         svg_parts = ['<svg xmlns="http://www.w3.org/2000/svg">']
 
@@ -259,7 +283,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             for (x1, y1, x2, y2) in segments:
                 svg_parts.append(
                     f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                    f'stroke="{color_hex}" stroke-width="2" opacity="1"/>'
+                    f'stroke="{color_hex}" stroke-width="{width}" opacity="{opacity}"/>'
                 )
 
         # Horizon line
@@ -267,7 +291,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             x1, y1, x2, y2 = lines["horizon"]
             svg_parts.append(
                 f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                f'stroke="{colors["HL"].name()}" stroke-width="2" opacity="1"/>'
+                f'stroke="{colors["HL"].name()}" stroke-width="{width}" opacity="{opacity}"/>'
             )
 
         # Vertical center line
@@ -275,7 +299,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             x1, y1, x2, y2 = lines["vertical_center"]
             svg_parts.append(
                 f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                f'stroke="{colors["HL"].name()}" stroke-width="2" opacity="1"/>'
+                f'stroke="{colors["HL"].name()}" stroke-width="{width}" opacity="{opacity}"/>'
             )
 
         svg_parts.append('</svg>')
