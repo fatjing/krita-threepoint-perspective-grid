@@ -276,7 +276,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             return
 
         self.doc = doc
-        self.remove_grid_preview(doc)
+        self.remove_grid_preview()
 
         main_window = Krita.instance().activeWindow().qwindow()
         self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_grid_preview, main_window)
@@ -286,36 +286,35 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.current_dlg.show()
 
     def on_dialog_accepted(self):
-        self.current_dlg = None
         self.save_settings(self.params)
-        layer = self.get_vector_layer(self.doc, "Perspective Grid (Preview)")
+        layer = self.get_vector_layer("Perspective Grid (Preview)")
         if layer is not None:
             layer.setName("Perspective Grid")
 
     def on_dialog_rejected(self):
-        self.current_dlg = None
-        self.remove_grid_preview(self.doc)
+        self.remove_grid_preview()
 
     def on_dialog_finished(self):
         self.current_dlg = None
 
-    def remove_grid_preview(self, doc):
-        layer = self.get_vector_layer(doc, "Perspective Grid (Preview)")
+    def remove_grid_preview(self):
+        layer = self.get_vector_layer("Perspective Grid (Preview)")
         if layer is not None:
             layer.remove()
 
     def update_grid_preview(self, params):
         self.render_grid_to_layer(self.doc, params, "Perspective Grid (Preview)")
 
-    def get_vector_layer(self, doc, layer_name):
-        for child in doc.rootNode().childNodes():
-            if child.name() == layer_name and child.type() == "vectorlayer":
-                return child
+    def get_vector_layer(self, layer_name):
+        if self.doc:
+            for child in self.doc.rootNode().childNodes():
+                if child.name() == layer_name and child.type() == "vectorlayer":
+                    return child
         return None
 
     def render_grid_to_layer(self, doc, params, layer_name):
-        svg = self.build_svg(doc, params)
-        layer = self.get_vector_layer(doc, layer_name)
+        svg = self.build_svg(params, doc.width(), doc.height())
+        layer = self.get_vector_layer(layer_name)
         if layer is not None:
             layer.remove()
         layer = doc.createVectorLayer(layer_name)
@@ -325,8 +324,8 @@ class ThreePointPerspectiveGridExtension(Extension):
             doc.setActiveNode(previous_node)
         layer.addShapesFromSvg(svg)
 
-    def build_svg(self, doc, params):
-        lines = self.compute_grid_lines(params, doc.width(), doc.height())
+    def build_svg(self, params, W, H):
+        lines = self.compute_grid_lines(params, W, H)
         colors = params["colors"]
         width = params["line_width"]
         opacity = params["line_opacity"]
@@ -357,7 +356,7 @@ class ThreePointPerspectiveGridExtension(Extension):
                 f'stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}"/>'
             )
 
-        svg_parts.append('</svg>')
+        svg_parts.append("</svg>")
         return "".join(svg_parts)
 
     def compute_grid_lines(self, params, W, H):
@@ -393,7 +392,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             v_cam = mat_vec_mul(R, list(D))
             vh = mat_vec_mul(K, v_cam)
             if abs(vh[2]) < 1e-12:
-                return (float('inf'), float('inf'))
+                return (float("inf"), float("inf"))
             return (vh[0] / vh[2], vh[1] / vh[2])
 
         # Grid direction vectors (world space, Y-up, Z = view direction)
