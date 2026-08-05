@@ -1,7 +1,9 @@
 from PyQt5.QtWidgets import (
     QDialog,
     QVBoxLayout,
+    QHBoxLayout,
     QFormLayout,
+    QGridLayout,
     QCheckBox,
     QColorDialog,
     QDialogButtonBox,
@@ -48,7 +50,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.vp2_label = QLabel(f"{(90.0 - self.params['vp1_angle']):.2f}°")
         form.addRow("RVP angle", self.vp2_label)
 
-        # Pitch (camera tilt) – positive = look up
+        # Camera Pitch
         self.pitch_spin = QDoubleSpinBox()
         self.pitch_spin.setRange(-89.9, 89.9)
         self.pitch_spin.setValue(self.params['pitch'])
@@ -58,7 +60,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.pitch_spin.valueChanged.connect(self.request_preview)
         form.addRow("Pitch", self.pitch_spin)
 
-        # Roll – camera rotation around the view axis
+        # Camera Roll
         self.roll_spin = QDoubleSpinBox()
         self.roll_spin.setRange(-180.0, 180.0)
         self.roll_spin.setValue(self.params['roll'])
@@ -79,15 +81,19 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form.addRow("FOV", self.fov_spin)
 
         # Vertical plane diagonals
-        self.show_ldvp_check = QCheckBox("Show left wall diagonal")
+        diag_layout = QHBoxLayout()
+
+        self.show_ldvp_check = QCheckBox("Left wall")
         self.show_ldvp_check.setChecked(self.params["show_ldvp"])
         self.show_ldvp_check.stateChanged.connect(self.request_preview)
-        form.addRow("", self.show_ldvp_check)
+        diag_layout.addWidget(self.show_ldvp_check)
 
-        self.show_rdvp_check = QCheckBox("Show right wall diagonal")
+        self.show_rdvp_check = QCheckBox("Right wall")
         self.show_rdvp_check.setChecked(self.params["show_rdvp"])
         self.show_rdvp_check.stateChanged.connect(self.request_preview)
-        form.addRow("", self.show_rdvp_check)
+        diag_layout.addWidget(self.show_rdvp_check)
+
+        form.addRow("Diagonal VP", diag_layout)
 
         # Grid density
         self.grid_density = QSpinBox()
@@ -116,11 +122,14 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         # Color pickers
         self.colors = {target: color for target, color in self.params['colors'].items()}
-        for target, color in self.colors.items():
-            btn = QPushButton()
-            btn.setStyleSheet(f"background-color: {color.name()}")
+        color_grid = QGridLayout()
+        for i, (target, color) in enumerate(self.colors.items()):
+            btn = QPushButton(target)
+            fg = self.contrasting_text_color(color)
+            btn.setStyleSheet(f"background-color: {color.name()}; color: {fg.name()}")
             btn.clicked.connect(lambda _, t=target, b=btn: self.pick_color(t, b))
-            form.addRow(f"{target} color", btn)
+            color_grid.addWidget(btn, i // 2, i % 2)
+        form.addRow("Colors", color_grid)
 
         layout.addLayout(form)
 
@@ -133,6 +142,21 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.setLayout(layout)
         self.preview_timer.start(0)
 
+    def pick_color(self, target, button):
+        color = QColorDialog.getColor(self.colors[target], self, f"Pick color for {target}")
+        if color.isValid():
+            self.colors[target] = color
+            fg = self.contrasting_text_color(color)
+            button.setStyleSheet(f"background-color: {color.name()}; color: {fg.name()}")
+            self.request_preview()
+
+    def contrasting_text_color(self, bg):
+        r, g, b = bg.redF(), bg.greenF(), bg.blueF()
+        def linearize(c):
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        luminance = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+        return QColor(51, 51, 51) if luminance > 0.179 else QColor(244, 244, 244)
+
     def on_vp1_angle_changed(self, angle):
         self.vp1_angle_spin.blockSignals(True)
         self.vp1_angle_spin.setValue(angle)
@@ -144,13 +168,6 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         self.vp2_label.setText(f"{(90.0 - angle):.2f}°")
         self.request_preview()
-
-    def pick_color(self, target, button):
-        col = QColorDialog.getColor(self.colors[target], self, f"Pick color for {target}")
-        if col.isValid():
-            self.colors[target] = col
-            button.setStyleSheet(f"background-color: {col.name()}")
-            self.request_preview()
 
     def request_preview(self):
         self.preview_timer.start(300)
