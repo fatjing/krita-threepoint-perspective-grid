@@ -16,13 +16,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 from krita import Krita, Extension
-import math
+import math, json
 
 class ThreePointPerspectiveGridDialog(QDialog):
-    def __init__(self, params, preview_callback=None, parent=None):
+    def __init__(self, params, defaults, preview_callback=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("3-Point Perspective Grid")
         self.params = params
+        self.defaults = defaults
         self.preview_callback = preview_callback
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
@@ -125,37 +126,45 @@ class ThreePointPerspectiveGridDialog(QDialog):
         color_grid = QGridLayout()
         for i, (target, color) in enumerate(self.colors.items()):
             btn = QPushButton(target)
+            btn.setObjectName(target)  # for findChild in reset
             fg = self.contrasting_text_color(color)
-            btn.setStyleSheet(f"background-color: {color.name()}; color: {fg.name()}")
+            btn.setStyleSheet(f"background-color: {color}; color: {fg}")
             btn.clicked.connect(lambda _, t=target, b=btn: self.pick_color(t, b))
             color_grid.addWidget(btn, i // 2, i % 2)
         form.addRow("Colors", color_grid)
 
         layout.addLayout(form)
 
-        # OK / Cancel
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.handle_accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        # Reset + OK/Cancel buttons
+        reset_btn = QPushButton("Reset")
+        reset_btn.clicked.connect(self.reset_to_defaults)
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.handle_accept)
+        button_box.rejected.connect(self.reject)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(reset_btn)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(button_box)
+        layout.addLayout(buttons_layout)
 
         self.setLayout(layout)
         self.preview_timer.start(0)
 
     def pick_color(self, target, button):
-        color = QColorDialog.getColor(self.colors[target], self, f"Pick color for {target}")
+        color = QColorDialog.getColor(QColor(self.colors[target]), self, f"Pick color for {target}")
         if color.isValid():
-            self.colors[target] = color
-            fg = self.contrasting_text_color(color)
-            button.setStyleSheet(f"background-color: {color.name()}; color: {fg.name()}")
+            self.colors[target] = color.name()
+            fg = self.contrasting_text_color(color.name())
+            button.setStyleSheet(f"background-color: {color.name()}; color: {fg}")
             self.request_preview()
 
     def contrasting_text_color(self, bg):
+        bg = QColor(bg)
         r, g, b = bg.redF(), bg.greenF(), bg.blueF()
         def linearize(c):
             return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
         luminance = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
-        return QColor(51, 51, 51) if luminance > 0.179 else QColor(244, 244, 244)
+        return "#333333" if luminance > 0.179 else "#f4f4f4"
 
     def on_vp1_angle_changed(self, angle):
         self.vp1_angle_spin.blockSignals(True)
@@ -187,37 +196,57 @@ class ThreePointPerspectiveGridDialog(QDialog):
             "grid_density": self.grid_density.value(),
             "line_width": self.line_width_spin.value(),
             "line_opacity": self.line_opacity_spin.value(),
-            "colors": self.colors
+            "colors": {k: v for k, v in self.colors.items()}
         }
 
     def handle_accept(self):
-        self.params.update(self.get_current_params())
+        self.params = self.get_current_params()
         self.accept()
+
+    def reset_to_defaults(self):
+        d = self.defaults
+        self.vp1_angle_spin.setValue(d["vp1_angle"])
+        self.pitch_spin.setValue(d["pitch"])
+        self.roll_spin.setValue(d["roll"])
+        self.fov_spin.setValue(d["fov"])
+        self.show_ldvp_check.setChecked(d["show_ldvp"])
+        self.show_rdvp_check.setChecked(d["show_rdvp"])
+        self.grid_density.setValue(d["grid_density"])
+        self.line_width_spin.setValue(d["line_width"])
+        self.line_opacity_spin.setValue(d["line_opacity"])
+        for target, color in d["colors"].items():
+            self.colors[target] = color
+            btn = self.findChild(QPushButton, target)
+            if btn:
+                fg = self.contrasting_text_color(color)
+                btn.setStyleSheet(f"background-color: {color}; color: {fg}")
 
 
 class ThreePointPerspectiveGridExtension(Extension):
+    DEFAULT_PARAMS = {
+        "vp1_angle": 30,
+        "pitch": 0,
+        "roll": 0,
+        "fov": 78,
+        "show_ldvp": False,
+        "show_rdvp": False,
+        "grid_density": 12,
+        "line_width": 1,
+        "line_opacity": 1.0,
+        "colors": {
+            "VP1":  "#acb8ff",
+            "VP2":  "#acb8ff",
+            "VP3":  "#e99df5",
+            "DVP":  "#f3dc85",
+            "LDVP": "#c0eac7",
+            "RDVP": "#afeaea",
+            "HL":   "#bdc4cb",
+        }
+    }
+
     def __init__(self, parent):
         super().__init__(parent)
-        self.params = {
-            "vp1_angle": 30,
-            "pitch": 0,
-            "roll": 0,
-            "fov": 78,
-            "show_ldvp": False,
-            "show_rdvp": False,
-            "grid_density": 12,
-            "line_width": 1,
-            "line_opacity": 1.0,
-            "colors": {
-                "VP1":  QColor(172, 184, 255),
-                "VP2":  QColor(172, 184, 255),
-                "VP3":  QColor(233, 157, 245),
-                "DVP":  QColor(243, 220, 133),
-                "LDVP": QColor(192, 234, 199),
-                "RDVP": QColor(175, 234, 234),
-                "HL":   QColor(189, 196, 203),
-            },
-        }
+        self.params = self.load_settings()
         self.current_dlg = None
         self.doc = None
 
@@ -227,6 +256,15 @@ class ThreePointPerspectiveGridExtension(Extension):
     def createActions(self, window):
         action = window.createAction("threepoint_perspective_grid", "Three-Point Perspective Grid", "tools/scripts")
         action.triggered.connect(self.show_dialog)
+
+    def load_settings(self):
+        params_json = Krita.instance().readSetting("ThreePointPerspectiveGrid", "params", "")
+        if params_json:
+            return json.loads(params_json)
+        return {k: (v.copy() if isinstance(v, dict) else v) for k, v in self.DEFAULT_PARAMS.items()}
+
+    def save_settings(self, params):
+        Krita.instance().writeSetting("ThreePointPerspectiveGrid", "params", json.dumps(params))
 
     def show_dialog(self):
         doc = Krita.instance().activeDocument()
@@ -241,7 +279,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.remove_grid_preview(doc)
 
         main_window = Krita.instance().activeWindow().qwindow()
-        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.update_grid_preview, main_window)
+        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_grid_preview, main_window)
         self.current_dlg.accepted.connect(self.on_dialog_accepted)
         self.current_dlg.rejected.connect(self.on_dialog_rejected)
         self.current_dlg.finished.connect(self.on_dialog_finished)
@@ -249,6 +287,7 @@ class ThreePointPerspectiveGridExtension(Extension):
 
     def on_dialog_accepted(self):
         self.current_dlg = None
+        self.save_settings(self.params)
         layer = self.get_vector_layer(self.doc, "Perspective Grid (Preview)")
         if layer is not None:
             layer.setName("Perspective Grid")
@@ -296,11 +335,10 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         # Vanishing lines
         for vp_name, segments in lines["vp_rays"].items():
-            color_hex = colors[vp_name].name()
             for (x1, y1, x2, y2) in segments:
                 svg_parts.append(
                     f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                    f'stroke="{color_hex}" stroke-width="{width}" opacity="{opacity}"/>'
+                    f'stroke="{colors[vp_name]}" stroke-width="{width}" opacity="{opacity}"/>'
                 )
 
         # Horizon line
@@ -308,7 +346,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             x1, y1, x2, y2 = lines["horizon"]
             svg_parts.append(
                 f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                f'stroke="{colors["HL"].name()}" stroke-width="{width}" opacity="{opacity}"/>'
+                f'stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}"/>'
             )
 
         # Vertical center line
@@ -316,7 +354,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             x1, y1, x2, y2 = lines["vertical_center"]
             svg_parts.append(
                 f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                f'stroke="{colors["HL"].name()}" stroke-width="{width}" opacity="{opacity}"/>'
+                f'stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}"/>'
             )
 
         svg_parts.append('</svg>')
