@@ -34,16 +34,16 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         # VP1 angle (determines the orientation of the ground‑plane grid)
         self.vp1_angle_spin = QDoubleSpinBox()
-        self.vp1_angle_spin.setRange(0.1, 89.9)
+        self.vp1_angle_spin.setRange(0.0, 90.0)
         self.vp1_angle_spin.setValue(self.params['vp1_angle'])
         self.vp1_angle_spin.setSingleStep(5)
         self.vp1_angle_spin.setSuffix("°")
-        self.vp1_angle_spin.setToolTip("Angle from the viewing direction to the left set of grid lines.")
+        self.vp1_angle_spin.setToolTip("Angle from the viewing direction to the left set of grid lines")
         self.vp1_angle_spin.valueChanged.connect(lambda val: self.on_vp1_angle_changed(val))
         form.addRow("LVP angle", self.vp1_angle_spin)
 
         self.vp1_angle_slider = QSlider(Qt.Horizontal)
-        self.vp1_angle_slider.setRange(1, 899)
+        self.vp1_angle_slider.setRange(0, 900)
         self.vp1_angle_slider.setValue(round(self.params['vp1_angle'] * 10))
         self.vp1_angle_slider.valueChanged.connect(lambda val: self.on_vp1_angle_changed(val / 10.0))
         form.addRow("", self.vp1_angle_slider)
@@ -53,11 +53,11 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         # Camera Pitch
         self.pitch_spin = QDoubleSpinBox()
-        self.pitch_spin.setRange(-89.9, 89.9)
+        self.pitch_spin.setRange(-90.0, 90.0)
         self.pitch_spin.setValue(self.params['pitch'])
         self.pitch_spin.setSingleStep(5)
         self.pitch_spin.setSuffix("°")
-        self.pitch_spin.setToolTip("Camera pitch. Positive = look up (horizon moves down).")
+        self.pitch_spin.setToolTip("Camera pitch")
         self.pitch_spin.valueChanged.connect(self.request_preview)
         form.addRow("Pitch", self.pitch_spin)
 
@@ -67,17 +67,17 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.roll_spin.setValue(self.params['roll'])
         self.roll_spin.setSingleStep(5)
         self.roll_spin.setSuffix("°")
-        self.roll_spin.setToolTip("Camera roll. Positive = counter‑clockwise rotation of the image.")
+        self.roll_spin.setToolTip("Camera roll")
         self.roll_spin.valueChanged.connect(self.request_preview)
         form.addRow("Roll", self.roll_spin)
 
         # Field of view
         self.fov_spin = QDoubleSpinBox()
-        self.fov_spin.setRange(1, 179)
+        self.fov_spin.setRange(0.1, 179.9)
         self.fov_spin.setValue(self.params['fov'])
         self.fov_spin.setSingleStep(5)
         self.fov_spin.setSuffix("°")
-        self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner.")
+        self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner")
         self.fov_spin.valueChanged.connect(self.request_preview)
         form.addRow("FOV", self.fov_spin)
 
@@ -86,11 +86,13 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         self.show_ldvp_check = QCheckBox("Left wall")
         self.show_ldvp_check.setChecked(self.params["show_ldvp"])
+        self.show_ldvp_check.setToolTip("Diagonal vp on vertical plane")
         self.show_ldvp_check.stateChanged.connect(self.request_preview)
         diag_layout.addWidget(self.show_ldvp_check)
 
         self.show_rdvp_check = QCheckBox("Right wall")
         self.show_rdvp_check.setChecked(self.params["show_rdvp"])
+        self.show_rdvp_check.setToolTip("Diagonal vp on vertical plane")
         self.show_rdvp_check.stateChanged.connect(self.request_preview)
         diag_layout.addWidget(self.show_rdvp_check)
 
@@ -107,7 +109,6 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.line_width_spin = QSpinBox()
         self.line_width_spin.setRange(1, 20)
         self.line_width_spin.setValue(self.params['line_width'])
-        self.line_width_spin.setToolTip("Stroke width for all grid lines (pixels).")
         self.line_width_spin.valueChanged.connect(self.request_preview)
         form.addRow("Line width", self.line_width_spin)
 
@@ -115,9 +116,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.line_opacity_spin = QDoubleSpinBox()
         self.line_opacity_spin.setRange(0.0, 1.0)
         self.line_opacity_spin.setValue(self.params['line_opacity'])
-        self.line_opacity_spin.setSingleStep(0.1)
-        self.line_opacity_spin.setDecimals(2)
-        self.line_opacity_spin.setToolTip("Opacity for all grid lines (0 = fully transparent, 1 = fully opaque).")
+        self.line_opacity_spin.setSingleStep(0.05)
         self.line_opacity_spin.valueChanged.connect(self.request_preview)
         form.addRow("Line opacity", self.line_opacity_spin)
 
@@ -346,28 +345,17 @@ class ThreePointPerspectiveGridExtension(Extension):
         svg_parts = ['<svg xmlns="http://www.w3.org/2000/svg">']
 
         # Vanishing lines
-        for vp_name, segments in lines["vp_rays"].items():
+        for vp_name, segments in reversed(lines["vp_rays"].items()):
             for (x1, y1, x2, y2) in segments:
-                svg_parts.append(
-                    f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                    f'stroke="{colors[vp_name]}" stroke-width="{width}" opacity="{opacity}"/>'
-                )
+                svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors[vp_name]}" stroke-width="{width}" opacity="{opacity}" />')
 
-        # Horizon line
         if lines["horizon"]:
             x1, y1, x2, y2 = lines["horizon"]
-            svg_parts.append(
-                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                f'stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}"/>'
-            )
+            svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}" />')
 
-        # Vertical center line
         if lines["vertical_center"]:
             x1, y1, x2, y2 = lines["vertical_center"]
-            svg_parts.append(
-                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                f'stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}"/>'
-            )
+            svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}" />')
 
         svg_parts.append("</svg>")
         return "".join(svg_parts)
@@ -392,75 +380,42 @@ class ThreePointPerspectiveGridExtension(Extension):
         K = [[f, 0, cx], [0, f, cy], [0, 0, 1]]
 
         # Camera rotation: pitch around X, roll around Z (Y-up, Z-forward)
-        def Rx(angle):
-            c = math.cos(angle); s = math.sin(angle)
-            return [[1, 0, 0], [0, c, -s], [0, s, c]]
-        def Rz(angle):
-            c = math.cos(angle); s = math.sin(angle)
-            return [[c, -s, 0], [s, c, 0], [0, 0, 1]]
-        R = mat_mat_mul(Rz(math.radians(-roll)), Rx(-math.radians(pitch)))
+        R = mat_mat_mul(Rz(math.radians(roll)), Rx(math.radians(pitch)))
 
-        # Homogeneous projection of world direction D into image plane
-        def project_direction(D):
-            v_cam = mat_vec_mul(R, list(D))
-            vh = mat_vec_mul(K, v_cam)
-            if abs(vh[2]) < 1e-12:
-                return (float("inf"), float("inf"))
-            return (vh[0] / vh[2], vh[1] / vh[2])
-
-        # Grid direction vectors (world space, Y-up, Z = view direction)
+        # World direction vectors (Y-up, Z = view direction)
         a = math.radians(vp1_angle)
-        D1 = (-math.sin(a), 0, math.cos(a))              # left grid lines
-        D2 = ( math.cos(a), 0, math.sin(a))              # right grid lines (orthogonal)
-        D3 = (0, 1, 0)                                   # vertical (world up)
-        Ddvp = (D1[0] + D2[0], 0, D1[2] + D2[2])         # ground-plane diagonal
+        D1 = (-math.sin(a), 0, math.cos(a))         # left grid lines
+        D2 = ( math.cos(a), 0, math.sin(a))         # right grid lines (orthogonal)
+        D3 = (0, 1, 0)                              # vertical (world up)
+        Ddvp = (D1[0] + D2[0], 0, D1[2] + D2[2])    # ground-plane diagonal, D1+D2
 
-        vertical_vec = -D3[1] if pitch > 0 else D3[1]    # whether wall diagonals point upward or downward
-        Dldvp = (D1[0], D1[1] + vertical_vec, D1[2])     # left-wall diagonal
-        Drdvp = (D2[0], D2[1] + vertical_vec, D2[2])     # right-wall diagonal
+        vertical_vec = -1 if pitch < 0 else 1       # wall diagonal pointing up or down
+        Dldvp = (D1[0], vertical_vec, D1[2])        # left-wall diagonal, D1+D3
+        Drdvp = (D2[0], vertical_vec, D2[2])        # right-wall diagonal, D2+D3
 
-        vp_positions = {
-            "VP1": project_direction(D1),
-            "VP2": project_direction(D2),
-            "VP3": project_direction(D3),
-            "DVP": project_direction(Ddvp),
+        vp = {
+            "VP1": self.project_direction(D1, R, K),
+            "VP2": self.project_direction(D2, R, K),
+            "VP3": self.project_direction(D3, R, K),
+            "DVP": self.project_direction(Ddvp, R, K),
         }
         if show_ldvp:
-            vp_positions["LDVP"] = project_direction(Dldvp)
+            vp["LDVP"] = self.project_direction(Dldvp, R, K)
         if show_rdvp:
-            vp_positions["RDVP"] = project_direction(Drdvp)
+            vp["RDVP"] = self.project_direction(Drdvp, R, K)
 
-        # Gather rays for each VP
+        # Generate rays for each VP
         vp_rays = {}
-        for vp_name, vp in vp_positions.items():
-            if vp[0] == float('inf') or vp[1] == float('inf'):
-                continue
-            min_ang, max_ang = visible_angle_range(vp[0], vp[1], 0, 0, W, H)
-            span = max_ang - min_ang
-            num_lines = density * 2 if span >= math.pi - 1e-12 else density
-            step = span / num_lines
-            segments = []
-            for i in range(num_lines):
-                ang = min_ang + i * step
-                dx = math.cos(ang)
-                dy = math.sin(ang)
-                clipped = clip_line(vp[0], vp[1], dx, dy, 0, 0, W, H)
-                if clipped:
-                    segments.append(clipped)
-            vp_rays[vp_name] = segments
+        for name, vp_info in vp.items():
+            segments = self.generate_rays_from_vp(vp_info, W, H, density)
+            if segments:
+                vp_rays[name] = segments
 
         # Horizon line
-        vp1 = vp_positions["VP1"]
-        vp2 = vp_positions["VP2"]
-        horizon = clip_line(vp1[0], vp1[1], vp2[0] - vp1[0], vp2[1] - vp1[1], 0, 0, W, H)
+        horizon = self.generate_horizon(vp["VP1"], vp["VP2"], W, H)
 
         # Vertical center line
-        vp3 = vp_positions["VP3"]
-        if vp3[0] != float('inf') and vp3[1] != float('inf'):
-            vertical_center = clip_line(cx, cy, vp3[0] - cx, vp3[1] - cy, 0, 0, W, H)
-        else:
-            v_up = mat_vec_mul(R, [0.0, 1.0, 0.0])
-            vertical_center = clip_line(cx, cy, v_up[0], v_up[1], 0, 0, W, H)
+        vertical_center = self.generate_vertical_center(vp["VP3"], cx, cy, W, H)
 
         return {
             "vp_rays": vp_rays,
@@ -468,12 +423,91 @@ class ThreePointPerspectiveGridExtension(Extension):
             "vertical_center": vertical_center,
         }
 
+    def project_direction(self, D, R, K):
+        """ Project a world direction vector D into the image plane. """
+        v_cam = mat_vec_mul(R, D)
+        vh = mat_vec_mul(K, v_cam)
+        if abs(vh[2]) < 1e-9:
+            # Direction parallel to image plane -> infinite VP
+            dir_2d = (v_cam[0], v_cam[1])
+            return {'is_inf': True, 'vp': None, 'dir_2d': dir_2d}
+        else:
+            u = vh[0] / vh[2]
+            v = vh[1] / vh[2]
+            return {'is_inf': False, 'vp': (u, v), 'dir_2d': None}
+
+    def generate_rays_from_vp(self, vp_info, W, H, density):
+        segments = []
+        if vp_info['is_inf']:       # Parallel lines
+            dx, dy = vp_info['dir_2d']
+            # Normal perpendicular to the line direction
+            dx_p, dy_p = -dy, dx
+            # Normal coordinate at the image center
+            cx, cy = W / 2.0, H / 2.0
+            c0 = dx_p * cx + dy_p * cy
+
+            # Range of normal coordinate across the canvas corners
+            corners = [(0, 0), (W, 0), (W, H), (0, H)]
+            c_vals = [dx_p * x + dy_p * y for (x, y) in corners]
+            min_c = min(c_vals)
+            max_c = max(c_vals)
+
+            num_lines = density
+            step = (max_c - min_c) / num_lines
+            for i in range(num_lines):
+                c = min_c + i * step
+                # Find a point on the line: offset from center along normal
+                offset = (c - c0) / (dx_p * dx_p + dy_p * dy_p)
+                px = cx + offset * dx_p
+                py = cy + offset * dy_p
+                clipped = clip_line(px, py, dx, dy, 0, 0, W, H)
+                if clipped:
+                    segments.append(clipped)
+        else:                       # Finite VP – fan of rays
+            vp_x, vp_y = vp_info['vp']
+            min_ang, max_ang = visible_angle_range(vp_x, vp_y, 0, 0, W, H)
+            span = max_ang - min_ang
+            num_lines = density * 2 if span >= math.pi - 1e-9 else density
+            step = span / num_lines
+            for i in range(num_lines):
+                ang = min_ang + i * step
+                dx = math.cos(ang)
+                dy = math.sin(ang)
+                clipped = clip_line(vp_x, vp_y, dx, dy, 0, 0, W, H)
+                if clipped:
+                    segments.append(clipped)
+        return segments
+
+    def generate_horizon(self, vp1_info, vp2_info, W, H):
+        if not vp1_info['is_inf'] and not vp2_info['is_inf']:
+            x1, y1 = vp1_info['vp']
+            x2, y2 = vp2_info['vp']
+            return clip_line(x1, y1, x2 - x1, y2 - y1, 0, 0, W, H)
+        elif vp1_info['is_inf'] and not vp2_info['is_inf']:
+            dx, dy = vp1_info['dir_2d']
+            x2, y2 = vp2_info['vp']
+            return clip_line(x2, y2, dx, dy, 0, 0, W, H)
+        elif not vp1_info['is_inf'] and vp2_info['is_inf']:
+            x1, y1 = vp1_info['vp']
+            dx, dy = vp2_info['dir_2d']
+            return clip_line(x1, y1, dx, dy, 0, 0, W, H)
+        return None
+
+    def generate_vertical_center(self, vp3_info, cx, cy, W, H):
+        if not vp3_info['is_inf']:
+            dx = vp3_info['vp'][0] - cx
+            dy = vp3_info['vp'][1] - cy
+            return clip_line(cx, cy, dx, dy, 0, 0, W, H)
+        else:
+            dx, dy = vp3_info['dir_2d']
+            return clip_line(cx, cy, dx, dy, 0, 0, W, H)
+
 
 # Geometry helpers
 
 def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     """Return (min_angle, max_angle) in radians covering the canvas from given point."""
-    EPS = 1e-12
+    EPS = 1e-9
     # If the point is inside the canvas, all directions are visible
     if (xmin - EPS <= x0 <= xmax + EPS and
         ymin - EPS <= y0 <= ymax + EPS):
@@ -504,17 +538,17 @@ def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
 def clip_line(x0, y0, dx, dy, xmin, ymin, xmax, ymax):
     """Clip a line through (x0, y0) with direction (dx, dy) to the canvas."""
     length = math.hypot(dx, dy)
-    if length < 1e-12:
+    if length < 1e-9:
         return None
     ux = dx / length
     uy = dy / length
 
     # Compute the t values where the line reaches each of the four edges
     t_values = []
-    if abs(ux) > 1e-12:
+    if abs(ux) > 1e-9:
         t_values.append((xmin - x0) / ux)      # left edge
         t_values.append((xmax - x0) / ux)      # right edge
-    if abs(uy) > 1e-12:
+    if abs(uy) > 1e-9:
         t_values.append((ymin - y0) / uy)      # top edge
         t_values.append((ymax - y0) / uy)      # bottom edge
 
@@ -551,7 +585,24 @@ def liang_barsky_clip(x1, y1, x2, y2, xmin, ymin, xmax, ymax):
     return (x1 + u1 * dx, y1 + u1 * dy,
             x1 + u2 * dx, y1 + u2 * dy)
 
-# Helpers for 3×3 matrix arithmetic
+# Rotation matrices
+def Rx(angle):
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [
+        [1, 0,  0],
+        [0, c, -s],
+        [0, s,  c]]
+
+def Rz(angle):
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [
+        [c, -s, 0],
+        [s,  c, 0],
+        [0,  0, 1]]
+
+# Helpers for matrix arithmetic
 def mat_vec_mul(M, v):
     return [
         M[0][0]*v[0] + M[0][1]*v[1] + M[0][2]*v[2],
