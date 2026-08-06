@@ -199,7 +199,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         }
 
     def handle_accept(self):
-        self.params = self.get_current_params()
+        self.params.update(self.get_current_params())
         self.accept()
 
     def reset_to_defaults(self):
