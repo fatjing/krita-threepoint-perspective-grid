@@ -249,6 +249,8 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.params = self.load_settings()
         self.current_dlg = None
         self.doc = None
+        self.view = None
+        self.notifier = None
 
     def setup(self):
         pass
@@ -285,6 +287,15 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.current_dlg.finished.connect(self.on_dialog_finished)
         self.current_dlg.show()
 
+        self.view = Krita.instance().activeWindow().activeView()
+        self.notifier = Krita.instance().notifier()
+        self.notifier.viewClosed.connect(self.on_view_closed)
+
+    def on_view_closed(self, view):
+        if self.current_dlg and self.view == view:
+            self.doc = None
+            self.current_dlg.reject()
+
     def on_dialog_accepted(self):
         self.save_settings(self.params)
         layer = self.get_vector_layer("Perspective Grid (Preview)")
@@ -295,6 +306,8 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.remove_grid_preview()
 
     def on_dialog_finished(self):
+        if self.notifier:
+            self.notifier.viewClosed.disconnect(self.on_view_closed)
         self.current_dlg = None
 
     def remove_grid_preview(self):
