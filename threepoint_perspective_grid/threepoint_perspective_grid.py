@@ -345,25 +345,16 @@ class ThreePointPerspectiveGridExtension(Extension):
     def build_svg(self, params, W, H):
         lines = self.compute_grid_lines(params, W, H)
         colors = params["colors"]
+        colors['VC'] = colors['HL']
         width = params["line_width"]
         opacity = params["line_opacity"]
 
         svg_parts = ['<svg xmlns="http://www.w3.org/2000/svg">']
-
-        # Vanishing lines
-        for vp_name, segments in reversed(lines["vp_rays"].items()):
+        for name, segments in reversed(lines.items()):
             for x1, y1, x2, y2 in segments:
-                svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors[vp_name]}" stroke-width="{width}" opacity="{opacity}" />')
-
-        if lines["horizon"]:
-            x1, y1, x2, y2 = lines["horizon"]
-            svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}" />')
-
-        if lines["vertical_center"]:
-            x1, y1, x2, y2 = lines["vertical_center"]
-            svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors["HL"]}" stroke-width="{width}" opacity="{opacity}" />')
-
+                svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors[name]}" stroke-width="{width}" opacity="{opacity}" />')
         svg_parts.append("</svg>")
+
         return "".join(svg_parts)
 
     def compute_grid_lines(self, params, W, H):
@@ -375,7 +366,6 @@ class ThreePointPerspectiveGridExtension(Extension):
         density = params["grid_density"]
         show_ldvp = params["show_ldvp"]
         show_rdvp = params["show_rdvp"]
-
         cx = W / 2.0
         cy = H / 2.0
 
@@ -395,7 +385,6 @@ class ThreePointPerspectiveGridExtension(Extension):
         D2 = (1, 0, 0)          # right   -> VP2
         D3 = (0, 1, 0)          # up      -> VP3
         Ddvp = (1, 0, 1)        # ground-plane diagonal (D1 + D2)
-
         vertical_vec = -1 if pitch < 0 else 1   # wall diagonal pointing up or down
         Dldvp = (0, vertical_vec, 1)            # left-wall diagonal (D1 + D3)
         Drdvp = (1, vertical_vec, 0)            # right-wall diagonal (D2 + D3)
@@ -411,24 +400,22 @@ class ThreePointPerspectiveGridExtension(Extension):
         if show_rdvp:
             vp["RDVP"] = self.project_direction(Drdvp, R, K)
 
+        lines = {}
+
+        horizon = self.generate_horizon(vp["VP1"], vp["VP2"], W, H)
+        if horizon:
+            lines['HL'] = [horizon]
+        vertical_center = self.generate_vertical_center(vp["VP3"], cx, cy, W, H)
+        if vertical_center:
+            lines['VC'] = [vertical_center]
+
         # Generate rays for each VP
-        vp_rays = {}
         for name, vp_info in vp.items():
             segments = self.generate_rays_from_vp(vp_info, W, H, density)
             if segments:
-                vp_rays[name] = segments
+                lines[name] = segments
 
-        # Horizon line
-        horizon = self.generate_horizon(vp["VP1"], vp["VP2"], W, H)
-
-        # Vertical center line
-        vertical_center = self.generate_vertical_center(vp["VP3"], cx, cy, W, H)
-
-        return {
-            "vp_rays": vp_rays,
-            "horizon": horizon,
-            "vertical_center": vertical_center,
-        }
+        return lines
 
     def project_direction(self, D, R, K):
         """ Project a world direction vector D into the image plane. """
@@ -447,11 +434,9 @@ class ThreePointPerspectiveGridExtension(Extension):
         segments = []
         if vp_info['is_inf']:       # Parallel lines
             dx, dy = vp_info['dir_2d']
-            # Normal perpendicular to the line direction
-            dx_p, dy_p = -dy, dx
-            # Normal coordinate at the image center
+            dx_p, dy_p = -dy, dx    # Normal perpendicular to the line direction
             cx, cy = W / 2.0, H / 2.0
-            c0 = dx_p * cx + dy_p * cy
+            c0 = dx_p * cx + dy_p * cy  # Normal coordinate at the image center
 
             # Range of normal coordinate across the canvas corners
             corners = [(0, 0), (W, 0), (W, H), (0, H)]
@@ -516,8 +501,7 @@ def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     """Return (min_angle, max_angle) in radians covering the canvas from given point."""
     EPS = 1e-9
     # If the point is inside the canvas, all directions are visible
-    if (xmin - EPS < x0 < xmax + EPS and
-        ymin - EPS < y0 < ymax + EPS):
+    if (xmin - EPS < x0 < xmax + EPS and ymin - EPS < y0 < ymax + EPS):
         return 0, 2 * math.pi
 
     angles = []
