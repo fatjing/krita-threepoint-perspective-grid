@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QSlider,
     QSpinBox,
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QByteArray
 from PyQt5.QtGui import QColor
 from krita import Krita, Extension
 import math, json
@@ -138,7 +138,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         reset_btn = QPushButton("Reset")
         reset_btn.clicked.connect(self.reset_to_defaults)
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.handle_accept)
+        button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         buttons_layout = QHBoxLayout()
         buttons_layout.addWidget(reset_btn)
@@ -184,6 +184,15 @@ class ThreePointPerspectiveGridDialog(QDialog):
         if self.isVisible() and self.preview_callback:
             self.preview_callback(self.get_current_params())
 
+    def restore_geometry(self):
+        data = Krita.instance().readSetting("ThreePointPerspectiveGrid", "dialogGeometry", "")
+        if data:
+            self.restoreGeometry(QByteArray.fromBase64(data.encode()))
+
+    def save_geometry(self):
+        data = self.saveGeometry().toBase64().data().decode()
+        Krita.instance().writeSetting("ThreePointPerspectiveGrid", "dialogGeometry", data)
+
     def get_current_params(self):
         return {
             "vp1_angle": self.vp1_angle_spin.value(),
@@ -197,10 +206,6 @@ class ThreePointPerspectiveGridDialog(QDialog):
             "line_opacity": self.line_opacity_spin.value(),
             "colors": {k: v for k, v in self.colors.items()}
         }
-
-    def handle_accept(self):
-        self.params.update(self.get_current_params())
-        self.accept()
 
     def reset_to_defaults(self):
         d = self.defaults
@@ -268,22 +273,22 @@ class ThreePointPerspectiveGridExtension(Extension):
         Krita.instance().writeSetting("ThreePointPerspectiveGrid", "params", json.dumps(params))
 
     def show_dialog(self):
-        doc = Krita.instance().activeDocument()
-        if not doc:
-            return
-
         if self.current_dlg and self.current_dlg.isVisible():
             self.current_dlg.raise_()
             return
 
+        doc = Krita.instance().activeDocument()
+        if not doc:
+            return
         self.doc = doc
         self.remove_grid_preview()
 
         main_window = Krita.instance().activeWindow().qwindow()
         self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_grid_preview, main_window)
-        self.current_dlg.accepted.connect(self.on_dialog_accepted)
+        self.current_dlg.accepted.connect(lambda: self.on_dialog_accepted(self.current_dlg))
         self.current_dlg.rejected.connect(self.on_dialog_rejected)
-        self.current_dlg.finished.connect(self.on_dialog_finished)
+        self.current_dlg.finished.connect(lambda: self.on_dialog_finished(self.current_dlg))
+        self.current_dlg.restore_geometry()
         self.current_dlg.show()
 
         self.view = Krita.instance().activeWindow().activeView()
@@ -295,7 +300,8 @@ class ThreePointPerspectiveGridExtension(Extension):
             self.doc = None
             self.current_dlg.reject()
 
-    def on_dialog_accepted(self):
+    def on_dialog_accepted(self, dialog):
+        self.params = dialog.get_current_params()
         self.save_settings(self.params)
         layer = self.get_vector_layer("Perspective Grid (Preview)")
         if layer is not None:
@@ -304,10 +310,10 @@ class ThreePointPerspectiveGridExtension(Extension):
     def on_dialog_rejected(self):
         self.remove_grid_preview()
 
-    def on_dialog_finished(self):
+    def on_dialog_finished(self, dialog):
+        dialog.save_geometry()
         if self.notifier:
             self.notifier.viewClosed.disconnect(self.on_view_closed)
-        self.current_dlg = None
 
     def remove_grid_preview(self):
         layer = self.get_vector_layer("Perspective Grid (Preview)")
