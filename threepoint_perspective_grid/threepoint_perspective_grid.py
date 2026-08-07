@@ -32,7 +32,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         layout = QVBoxLayout()
         form = QFormLayout()
 
-        # VP1 angle (determines the orientation of the ground‑plane grid)
+        # Left vanishing point angle
         self.vp1_angle_spin = QDoubleSpinBox()
         self.vp1_angle_spin.setRange(0.0, 90.0)
         self.vp1_angle_spin.setValue(self.params['vp1_angle'])
@@ -379,19 +379,20 @@ class ThreePointPerspectiveGridExtension(Extension):
         # Intrinsic matrix K
         K = [[f, 0, cx], [0, f, cy], [0, 0, 1]]
 
-        # Camera rotation: pitch around X, roll around Z (Y-up, Z-forward)
-        R = mat_mat_mul(Rz(math.radians(roll)), Rx(math.radians(pitch)))
+        # Camera rotation: yaw around Y -> pitch around X -> roll around Z
+        R = mat_mat_mul(Rz(math.radians(roll)),
+            mat_mat_mul(Rx(math.radians(pitch)),
+                        Ry(math.radians(-vp1_angle))))
 
-        # World direction vectors (Y-up, Z = view direction)
-        a = math.radians(vp1_angle)
-        D1 = (-math.sin(a), 0, math.cos(a))         # left grid lines
-        D2 = ( math.cos(a), 0, math.sin(a))         # right grid lines (orthogonal)
-        D3 = (0, 1, 0)                              # vertical (world up)
-        Ddvp = (D1[0] + D2[0], 0, D1[2] + D2[2])    # ground-plane diagonal, D1+D2
+        # World grid directions (X-Right, Y-Up, Z-Forward)
+        D1 = (0, 0, 1)          # forward -> VP1
+        D2 = (1, 0, 0)          # right   -> VP2
+        D3 = (0, 1, 0)          # up      -> VP3
+        Ddvp = (1, 0, 1)        # ground-plane diagonal (D1 + D2)
 
-        vertical_vec = -1 if pitch < 0 else 1       # wall diagonal pointing up or down
-        Dldvp = (D1[0], vertical_vec, D1[2])        # left-wall diagonal, D1+D3
-        Drdvp = (D2[0], vertical_vec, D2[2])        # right-wall diagonal, D2+D3
+        vertical_vec = -1 if pitch < 0 else 1   # wall diagonal pointing up or down
+        Dldvp = (0, vertical_vec, 1)            # left-wall diagonal (D1 + D3)
+        Drdvp = (1, vertical_vec, 0)            # right-wall diagonal (D2 + D3)
 
         vp = {
             "VP1": self.project_direction(D1, R, K),
@@ -593,6 +594,14 @@ def Rx(angle):
         [1, 0,  0],
         [0, c, -s],
         [0, s,  c]]
+
+def Ry(angle):
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [
+        [ c, 0, s],
+        [ 0, 1, 0],
+        [-s, 0, c]]
 
 def Rz(angle):
     c = math.cos(angle)
