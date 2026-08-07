@@ -346,7 +346,7 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         # Vanishing lines
         for vp_name, segments in reversed(lines["vp_rays"].items()):
-            for (x1, y1, x2, y2) in segments:
+            for x1, y1, x2, y2 in segments:
                 svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors[vp_name]}" stroke-width="{width}" opacity="{opacity}" />')
 
         if lines["horizon"]:
@@ -468,7 +468,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             vp_x, vp_y = vp_info['vp']
             min_ang, max_ang = visible_angle_range(vp_x, vp_y, 0, 0, W, H)
             span = max_ang - min_ang
-            num_lines = density * 2 if span >= math.pi - 1e-9 else density
+            num_lines = density * 2 if span > math.pi - 1e-9 else density
             step = span / num_lines
             for i in range(num_lines):
                 ang = min_ang + i * step
@@ -510,8 +510,8 @@ def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     """Return (min_angle, max_angle) in radians covering the canvas from given point."""
     EPS = 1e-9
     # If the point is inside the canvas, all directions are visible
-    if (xmin - EPS <= x0 <= xmax + EPS and
-        ymin - EPS <= y0 <= ymax + EPS):
+    if (xmin - EPS < x0 < xmax + EPS and
+        ymin - EPS < y0 < ymax + EPS):
         return 0, 2 * math.pi
 
     angles = []
@@ -537,54 +537,26 @@ def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     return min_ang, max_ang
 
 def clip_line(x0, y0, dx, dy, xmin, ymin, xmax, ymax):
-    """Clip a line through (x0, y0) with direction (dx, dy) to the canvas."""
-    length = math.hypot(dx, dy)
-    if length < 1e-9:
-        return None
-    ux = dx / length
-    uy = dy / length
-
-    # Compute the t values where the line reaches each of the four edges
-    t_values = []
-    if abs(ux) > 1e-9:
-        t_values.append((xmin - x0) / ux)      # left edge
-        t_values.append((xmax - x0) / ux)      # right edge
-    if abs(uy) > 1e-9:
-        t_values.append((ymin - y0) / uy)      # top edge
-        t_values.append((ymax - y0) / uy)      # bottom edge
-
-    if not t_values:
-        return None
-
-    max_abs_t = max(abs(t) for t in t_values)
-    half_length = max_abs_t * 1.1      # Extend by a small margin to avoid numerical misses at corners
-    end1 = (x0 - half_length * ux, y0 - half_length * uy)
-    end2 = (x0 + half_length * ux, y0 + half_length * uy)
-    return liang_barsky_clip(end1[0], end1[1], end2[0], end2[1], xmin, ymin, xmax, ymax)
-
-def liang_barsky_clip(x1, y1, x2, y2, xmin, ymin, xmax, ymax):
-    """Clip line segment to rectangle."""
-    dx = x2 - x1
-    dy = y2 - y1
+    """Use Liang-Barsky parametric approach to clip a line through (x0, y0) with direction (dx, dy) to a rectangle"""
     p = [-dx, dx, -dy, dy]
-    q = [x1 - xmin, xmax - x1, y1 - ymin, ymax - y1]
-    u1, u2 = 0.0, 1.0
+    q = [x0 - xmin, xmax - x0, y0 - ymin, ymax - y0]
+    t0, t1 = float("-inf"), float("inf")    # infinite line
 
     for i in range(4):
-        if p[i] == 0:
-            if q[i] < 0:
+        if p[i] == 0:       # parallel to the boundary
+            if q[i] < 0:    # outside the region
                 return None
         else:
             t = q[i] / p[i]
-            if p[i] < 0:
-                u1 = max(u1, t)
-            else:
-                u2 = min(u2, t)
+            if p[i] < 0:    # Entering the half-space
+                t0 = max(t0, t)
+            else:           # Leaving the half-space
+                t1 = min(t1, t)
 
-    if u1 > u2:
+    if t0 > t1:
         return None
-    return (x1 + u1 * dx, y1 + u1 * dy,
-            x1 + u2 * dx, y1 + u2 * dy)
+    return (x0 + t0 * dx, y0 + t0 * dy,
+            x0 + t1 * dx, y0 + t1 * dy)
 
 # Rotation matrices
 def Rx(angle):
