@@ -377,7 +377,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         opacity = params["line_opacity"]
 
         svg_parts = ['<svg xmlns="http://www.w3.org/2000/svg">']
-        for name, segments in reversed(lines.items()):
+        for name, segments in lines.items():
             for x1, y1, x2, y2 in segments:
                 svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colors[name]}" stroke-width="{width}" opacity="{opacity}" />')
         svg_parts.append("</svg>")
@@ -416,18 +416,18 @@ class ThreePointPerspectiveGridExtension(Extension):
         Dldvp = (0, vertical_vec, 1)            # left-wall diagonal (D1 + D3)
         Drdvp = (1, vertical_vec, 0)            # right-wall diagonal (D2 + D3)
 
-        vp = {
-            "VP1": self.project_direction(D1, R, K),
-            "VP2": self.project_direction(D2, R, K),
-            "VP3": self.project_direction(D3, R, K),
-            "DVP": self.project_direction(Ddvp, R, K),
-        }
-        if show_ldvp:
-            vp["LDVP"] = self.project_direction(Dldvp, R, K)
-        if show_rdvp:
-            vp["RDVP"] = self.project_direction(Drdvp, R, K)
+        d_list = [("RDVP", Drdvp, show_rdvp), ("LDVP", Dldvp, show_ldvp),
+                  ("DVP", Ddvp, True), ("VP3", D3, True),
+                  ("VP2", D2, True), ("VP1", D1, True)]     # correspond to draw order
+        vp = {name: self.project_direction(D, R, K) for name, D, isShow in d_list if isShow}
 
         lines = {}
+
+        # Generate rays for each VP
+        for name, vp_info in vp.items():
+            segments = self.generate_rays_from_vp(vp_info, W, H, density)
+            if segments:
+                lines[name] = segments
 
         lines["AXES"] = []
         horizon_line = self.generate_line_from_specs(vp["VP1"], vp["VP2"], W, H)
@@ -438,12 +438,6 @@ class ThreePointPerspectiveGridExtension(Extension):
         vertical_center_line = self.generate_line_from_specs(vp["VP3"], vision_center, W, H)
         if vertical_center_line:
             lines["AXES"].append(vertical_center_line)
-
-        # Generate rays for each VP
-        for name, vp_info in vp.items():
-            segments = self.generate_rays_from_vp(vp_info, W, H, density)
-            if segments:
-                lines[name] = segments
 
         return lines
 
