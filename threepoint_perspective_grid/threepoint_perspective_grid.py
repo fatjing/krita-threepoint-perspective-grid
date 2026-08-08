@@ -7,15 +7,12 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QLabel,
     QPushButton,
-    QSlider,
-    QSpinBox,
 )
 from PyQt5.QtCore import Qt, QTimer, QByteArray, QPointF
 from PyQt5.QtGui import QColor, QPainter, QPen, QImage
-from krita import Krita, Extension
+from krita import Krita, Extension, DoubleSliderSpinBox, SliderSpinBox
 import math, json
 
 class ThreePointPerspectiveGridDialog(QDialog):
@@ -33,26 +30,20 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form = QFormLayout()
 
         # Left vanishing point angle
-        self.vp1_angle_spin = QDoubleSpinBox()
+        self.vp1_angle_spin = DoubleSliderSpinBox().widget()
         self.vp1_angle_spin.setRange(0.0, 90.0)
         self.vp1_angle_spin.setValue(self.params['vp1_angle'])
         self.vp1_angle_spin.setSingleStep(5)
         self.vp1_angle_spin.setSuffix("°")
         self.vp1_angle_spin.setToolTip("Angle from the viewing direction to the left set of grid lines")
-        self.vp1_angle_spin.valueChanged.connect(lambda val: self.on_vp1_angle_changed(val))
+        self.vp1_angle_spin.valueChanged.connect(self.on_vp1_angle_changed)
         form.addRow("LVP angle", self.vp1_angle_spin)
-
-        self.vp1_angle_slider = QSlider(Qt.Horizontal)
-        self.vp1_angle_slider.setRange(0, 900)
-        self.vp1_angle_slider.setValue(round(self.params['vp1_angle'] * 10))
-        self.vp1_angle_slider.valueChanged.connect(lambda val: self.on_vp1_angle_changed(val / 10.0))
-        form.addRow("", self.vp1_angle_slider)
 
         self.vp2_label = QLabel(f"{(90.0 - self.params['vp1_angle']):.2f}°")
         form.addRow("RVP angle", self.vp2_label)
 
         # Camera Pitch
-        self.pitch_spin = QDoubleSpinBox()
+        self.pitch_spin = DoubleSliderSpinBox().widget()
         self.pitch_spin.setRange(-90.0, 90.0)
         self.pitch_spin.setValue(self.params['pitch'])
         self.pitch_spin.setSingleStep(5)
@@ -62,20 +53,18 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form.addRow("Pitch", self.pitch_spin)
 
         # Camera Roll
-        self.roll_spin = QDoubleSpinBox()
+        self.roll_spin = DoubleSliderSpinBox().widget()
         self.roll_spin.setRange(-180.0, 180.0)
         self.roll_spin.setValue(self.params['roll'])
-        self.roll_spin.setSingleStep(5)
         self.roll_spin.setSuffix("°")
         self.roll_spin.setToolTip("Camera roll")
         self.roll_spin.valueChanged.connect(self.request_preview)
         form.addRow("Roll", self.roll_spin)
 
         # Field of view
-        self.fov_spin = QDoubleSpinBox()
+        self.fov_spin = DoubleSliderSpinBox().widget()
         self.fov_spin.setRange(0.1, 179.9)
         self.fov_spin.setValue(self.params['fov'])
-        self.fov_spin.setSingleStep(5)
         self.fov_spin.setSuffix("°")
         self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner")
         self.fov_spin.valueChanged.connect(self.request_preview)
@@ -99,21 +88,21 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form.addRow("Diagonal VP", diag_layout)
 
         # Grid density
-        self.grid_density = QSpinBox()
-        self.grid_density.setRange(2, 180)
-        self.grid_density.setValue(self.params['grid_density'])
-        self.grid_density.valueChanged.connect(self.request_preview)
-        form.addRow("Grid density", self.grid_density)
+        self.grid_density_spin = SliderSpinBox().widget()
+        self.grid_density_spin.setRange(2, 180)
+        self.grid_density_spin.setValue(self.params['grid_density'])
+        self.grid_density_spin.valueChanged.connect(self.request_preview)
+        form.addRow("Grid density", self.grid_density_spin)
 
         # Line width
-        self.line_width_spin = QSpinBox()
+        self.line_width_spin = SliderSpinBox().widget()
         self.line_width_spin.setRange(1, 20)
         self.line_width_spin.setValue(self.params['line_width'])
         self.line_width_spin.valueChanged.connect(self.request_preview)
         form.addRow("Line width", self.line_width_spin)
 
         # Line opacity
-        self.line_opacity_spin = QDoubleSpinBox()
+        self.line_opacity_spin = DoubleSliderSpinBox().widget()
         self.line_opacity_spin.setRange(0.0, 1.0)
         self.line_opacity_spin.setValue(self.params['line_opacity'])
         self.line_opacity_spin.setSingleStep(0.05)
@@ -121,15 +110,16 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form.addRow("Line opacity", self.line_opacity_spin)
 
         # Color pickers
-        self.colors = {target: color for target, color in self.params['colors'].items()}
+        self.colors = {k: v for k, v in self.params['colors'].items()}
+        self.color_buttons = {}
         color_grid = QGridLayout()
         for i, (target, color) in enumerate(self.colors.items()):
             btn = QPushButton(target)
-            btn.setObjectName(target)  # for findChild in reset
             fg = self.contrasting_text_color(color)
             btn.setStyleSheet(f"background-color: {color}; color: {fg}")
-            btn.clicked.connect(lambda _, t=target, b=btn: self.pick_color(t, b))
+            btn.clicked.connect(lambda _, t=target: self.pick_color(t))
             color_grid.addWidget(btn, i // 2, i % 2)
+            self.color_buttons[target] = btn
         form.addRow("Colors", color_grid)
 
         layout.addLayout(form)
@@ -148,12 +138,12 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         self.setLayout(layout)
 
-    def pick_color(self, target, button):
+    def pick_color(self, target):
         color = QColorDialog.getColor(QColor(self.colors[target]), self, f"Pick color for {target}")
         if color.isValid():
             self.colors[target] = color.name()
             fg = self.contrasting_text_color(color.name())
-            button.setStyleSheet(f"background-color: {color.name()}; color: {fg}")
+            self.color_buttons[target].setStyleSheet(f"background-color: {color.name()}; color: {fg}")
             self.request_preview()
 
     def contrasting_text_color(self, bg):
@@ -165,19 +155,11 @@ class ThreePointPerspectiveGridDialog(QDialog):
         return "#333333" if luminance > 0.179 else "#f4f4f4"
 
     def on_vp1_angle_changed(self, angle):
-        self.vp1_angle_spin.blockSignals(True)
-        self.vp1_angle_spin.setValue(angle)
-        self.vp1_angle_spin.blockSignals(False)
-
-        self.vp1_angle_slider.blockSignals(True)
-        self.vp1_angle_slider.setValue(round(angle * 10))
-        self.vp1_angle_slider.blockSignals(False)
-
         self.vp2_label.setText(f"{(90.0 - angle):.2f}°")
         self.request_preview()
 
     def request_preview(self):
-        self.preview_timer.start(4)
+        self.preview_timer.start(16)
 
     def emit_preview(self):
         if self.isVisible() and self.preview_callback:
@@ -200,7 +182,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
             "fov": self.fov_spin.value(),
             "show_ldvp": self.show_ldvp_check.isChecked(),
             "show_rdvp": self.show_rdvp_check.isChecked(),
-            "grid_density": self.grid_density.value(),
+            "grid_density": self.grid_density_spin.value(),
             "line_width": self.line_width_spin.value(),
             "line_opacity": self.line_opacity_spin.value(),
             "colors": {k: v for k, v in self.colors.items()}
@@ -214,15 +196,13 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.fov_spin.setValue(d["fov"])
         self.show_ldvp_check.setChecked(d["show_ldvp"])
         self.show_rdvp_check.setChecked(d["show_rdvp"])
-        self.grid_density.setValue(d["grid_density"])
+        self.grid_density_spin.setValue(d["grid_density"])
         self.line_width_spin.setValue(d["line_width"])
         self.line_opacity_spin.setValue(d["line_opacity"])
         for target, color in d["colors"].items():
             self.colors[target] = color
-            btn = self.findChild(QPushButton, target)
-            if btn:
-                fg = self.contrasting_text_color(color)
-                btn.setStyleSheet(f"background-color: {color}; color: {fg}")
+            fg = self.contrasting_text_color(color)
+            self.color_buttons[target].setStyleSheet(f"background-color: {color}; color: {fg}")
 
 
 class ThreePointPerspectiveGridExtension(Extension):
@@ -233,7 +213,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         "fov": 78,
         "show_ldvp": False,
         "show_rdvp": False,
-        "grid_density": 12,
+        "grid_density": 14,
         "line_width": 1,
         "line_opacity": 1.0,
         "colors": {
@@ -277,10 +257,9 @@ class ThreePointPerspectiveGridExtension(Extension):
             self.current_dlg.raise_()
             return
 
-        doc = Krita.instance().activeDocument()
-        if not doc:
+        self.doc = Krita.instance().activeDocument()
+        if not self.doc:
             return
-        self.doc = doc
 
         main_window = Krita.instance().activeWindow().qwindow()
         self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_preview, main_window)
@@ -363,8 +342,8 @@ class ThreePointPerspectiveGridExtension(Extension):
 
     def render_svg_to_layer(self, doc, params, layer_name):
         svg = self.build_svg(params, doc.width(), doc.height())
-        layer = doc.createVectorLayer(layer_name)
         previous_node = doc.activeNode()
+        layer = doc.createVectorLayer(layer_name)
         doc.rootNode().addChildNode(layer, None)
         if previous_node:
             doc.setActiveNode(previous_node)
@@ -445,8 +424,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         """ Project a world direction vector D into the image plane. """
         v_cam = mat_vec_mul(R, D)
         vh = mat_vec_mul(K, v_cam)
-        if abs(vh[2]) < 1e-9:
-            # Direction parallel to image plane -> infinite VP
+        if abs(vh[2]) < 1e-9:   # Direction parallel to image plane -> infinite VP
             dir_2d = (v_cam[0], v_cam[1])
             return {'is_inf': True, 'point': None, 'dir_2d': dir_2d}
         else:
@@ -523,10 +501,9 @@ def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     corners = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)]
     for x, y in corners:
         ang = math.atan2(y - y0, x - x0)
-        angles.append(ang if ang >= 0 else ang + 2 * math.pi)    # normalise to [0, 2π)
+        angles.append(ang if ang >= 0 else ang + 2 * math.pi)   # normalise to [0, 2π)
     angles.sort()
-    # Duplicate the first angle + 2π to handle the wrap‑around gap
-    angles.append(angles[0] + 2 * math.pi)
+    angles.append(angles[0] + 2 * math.pi)      # handle wrap‑around gap
 
     max_gap = -1.0
     max_gap_start = 0
@@ -565,24 +542,21 @@ def clip_line(x0, y0, dx, dy, xmin, ymin, xmax, ymax):
 
 # Rotation matrices
 def Rx(angle):
-    c = math.cos(angle)
-    s = math.sin(angle)
+    c, s = math.cos(angle), math.sin(angle)
     return [
         [1, 0,  0],
         [0, c, -s],
         [0, s,  c]]
 
 def Ry(angle):
-    c = math.cos(angle)
-    s = math.sin(angle)
+    c, s = math.cos(angle), math.sin(angle)
     return [
         [ c, 0, s],
         [ 0, 1, 0],
         [-s, 0, c]]
 
 def Rz(angle):
-    c = math.cos(angle)
-    s = math.sin(angle)
+    c, s = math.cos(angle), math.sin(angle)
     return [
         [c, -s, 0],
         [s,  c, 0],
