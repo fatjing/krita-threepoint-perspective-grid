@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (
     QSlider,
     QSpinBox,
 )
-from PyQt5.QtCore import Qt, QTimer, QByteArray
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QTimer, QByteArray, QPointF
+from PyQt5.QtGui import QColor, QPainter, QPen, QImage
 from krita import Krita, Extension
 import math, json
 
@@ -147,7 +147,6 @@ class ThreePointPerspectiveGridDialog(QDialog):
         layout.addLayout(buttons_layout)
 
         self.setLayout(layout)
-        self.preview_timer.start(0)
 
     def pick_color(self, target, button):
         color = QColorDialog.getColor(QColor(self.colors[target]), self, f"Pick color for {target}")
@@ -178,7 +177,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.request_preview()
 
     def request_preview(self):
-        self.preview_timer.start(300)
+        self.preview_timer.start(4)
 
     def emit_preview(self):
         if self.isVisible() and self.preview_callback:
@@ -253,6 +252,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         self.params = self.load_settings()
         self.current_dlg = None
         self.doc = None
+        self.preview_layer = None
         self.view = None
         self.notifier = None
 
@@ -281,16 +281,16 @@ class ThreePointPerspectiveGridExtension(Extension):
         if not doc:
             return
         self.doc = doc
-        self.remove_grid_preview()
 
         main_window = Krita.instance().activeWindow().qwindow()
-        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_grid_preview, main_window)
+        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_preview, main_window)
         self.current_dlg.accepted.connect(lambda: self.on_dialog_accepted(self.current_dlg))
         self.current_dlg.rejected.connect(self.on_dialog_rejected)
         self.current_dlg.finished.connect(lambda: self.on_dialog_finished(self.current_dlg))
         self.current_dlg.restore_geometry()
         self.current_dlg.show()
 
+        self.update_preview(self.params)
         self.view = Krita.instance().activeWindow().activeView()
         self.notifier = Krita.instance().notifier()
         self.notifier.viewClosed.connect(self.on_view_closed)
@@ -298,43 +298,72 @@ class ThreePointPerspectiveGridExtension(Extension):
     def on_view_closed(self, view):
         if self.current_dlg and self.view == view:
             self.doc = None
+            self.preview_layer = None
             self.current_dlg.reject()
 
     def on_dialog_accepted(self, dialog):
         self.params = dialog.get_current_params()
         self.save_settings(self.params)
-        layer = self.get_vector_layer("Perspective Grid (Preview)")
-        if layer is not None:
-            layer.setName("Perspective Grid")
+        self.render_svg_to_layer(self.doc, self.params, "Perspective Grid")
+        self.remove_preview()
 
     def on_dialog_rejected(self):
-        self.remove_grid_preview()
+        self.remove_preview()
 
     def on_dialog_finished(self, dialog):
         dialog.save_geometry()
         if self.notifier:
             self.notifier.viewClosed.disconnect(self.on_view_closed)
 
-    def remove_grid_preview(self):
-        layer = self.get_vector_layer("Perspective Grid (Preview)")
-        if layer is not None:
-            layer.remove()
+    def remove_preview(self):
+        if self.preview_layer:
+            self.preview_layer.remove()
+            self.preview_layer = None
 
-    def update_grid_preview(self, params):
-        self.render_grid_to_layer(self.doc, params, "Perspective Grid (Preview)")
+    def update_preview(self, params):
+        self.render_qimage_to_layer(self.doc, params, "Perspective Grid (Preview)")
 
-    def get_vector_layer(self, layer_name):
-        if self.doc:
-            for child in self.doc.rootNode().childNodes():
-                if child.name() == layer_name and child.type() == "vectorlayer":
-                    return child
-        return None
+    def render_qimage_to_layer(self, doc, params, layer_name):
+        if not self.preview_layer:
+            previous_node = doc.activeNode()
+            self.preview_layer = doc.createNode(layer_name, "paintlayer")
+            doc.rootNode().addChildNode(self.preview_layer, None)
+            if previous_node:
+                doc.setActiveNode(previous_node)
 
-    def render_grid_to_layer(self, doc, params, layer_name):
+        W, H = doc.width(), doc.height()
+        image = self.build_qimage(params, W, H)
+        image = image.convertToFormat(QImage.Format_RGBA8888).rgbSwapped()
+        raw_bytes = image.constBits().asstring(image.sizeInBytes())
+
+        self.preview_layer.setPixelData(QByteArray(raw_bytes), 0, 0, W, H)
+        doc.refreshProjection()
+
+    def build_qimage(self, params, width, height):
+        image = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        lines = self.compute_grid_lines(params, width, height)
+        colors = params["colors"]
+        colors['VC'] = colors['HL']
+        line_width = params["line_width"]
+        opacity = params["line_opacity"]
+
+        for name, segments in lines.items():
+            pen = QPen(QColor(colors[name]), line_width)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.setOpacity(opacity)
+            for x1, y1, x2, y2 in segments:
+                painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+        painter.end()
+        return image
+
+    def render_svg_to_layer(self, doc, params, layer_name):
         svg = self.build_svg(params, doc.width(), doc.height())
-        layer = self.get_vector_layer(layer_name)
-        if layer is not None:
-            layer.remove()
         layer = doc.createVectorLayer(layer_name)
         previous_node = doc.activeNode()
         doc.rootNode().addChildNode(layer, None)
