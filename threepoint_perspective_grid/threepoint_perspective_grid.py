@@ -243,7 +243,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             "DVP":  "#f3dc85",
             "LDVP": "#c0eac7",
             "RDVP": "#afeaea",
-            "HL":   "#bdc4cb",
+            "AXES": "#bdc4cb",
         }
     }
 
@@ -347,7 +347,6 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         lines = self.compute_grid_lines(params, width, height)
         colors = params["colors"]
-        colors['VC'] = colors['HL']
         line_width = params["line_width"]
         opacity = params["line_opacity"]
 
@@ -374,7 +373,6 @@ class ThreePointPerspectiveGridExtension(Extension):
     def build_svg(self, params, W, H):
         lines = self.compute_grid_lines(params, W, H)
         colors = params["colors"]
-        colors['VC'] = colors['HL']
         width = params["line_width"]
         opacity = params["line_opacity"]
 
@@ -431,12 +429,15 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         lines = {}
 
-        horizon = self.generate_horizon(vp["VP1"], vp["VP2"], W, H)
-        if horizon:
-            lines['HL'] = [horizon]
-        vertical_center = self.generate_vertical_center(vp["VP3"], cx, cy, W, H)
-        if vertical_center:
-            lines['VC'] = [vertical_center]
+        lines["AXES"] = []
+        horizon_line = self.generate_line_from_specs(vp["VP1"], vp["VP2"], W, H)
+        if horizon_line:
+            lines["AXES"].append(horizon_line)
+
+        vision_center = {"is_inf": False, "point": (cx, cy), "dir_2d": None}
+        vertical_center_line = self.generate_line_from_specs(vp["VP3"], vision_center, W, H)
+        if vertical_center_line:
+            lines["AXES"].append(vertical_center_line)
 
         # Generate rays for each VP
         for name, vp_info in vp.items():
@@ -453,16 +454,16 @@ class ThreePointPerspectiveGridExtension(Extension):
         if abs(vh[2]) < 1e-9:
             # Direction parallel to image plane -> infinite VP
             dir_2d = (v_cam[0], v_cam[1])
-            return {'is_inf': True, 'vp': None, 'dir_2d': dir_2d}
+            return {'is_inf': True, 'point': None, 'dir_2d': dir_2d}
         else:
             u = vh[0] / vh[2]
             v = vh[1] / vh[2]
-            return {'is_inf': False, 'vp': (u, v), 'dir_2d': None}
+            return {'is_inf': False, 'point': (u, v), 'dir_2d': None}
 
-    def generate_rays_from_vp(self, vp_info, W, H, density):
+    def generate_rays_from_vp(self, vp, W, H, density):
         segments = []
-        if vp_info['is_inf']:       # Parallel lines
-            dx, dy = vp_info['dir_2d']
+        if vp['is_inf']:            # Parallel lines
+            dx, dy = vp['dir_2d']
             dx_p, dy_p = -dy, dx    # Normal perpendicular to the line direction
             cx, cy = W / 2.0, H / 2.0
             c0 = dx_p * cx + dy_p * cy  # Normal coordinate at the image center
@@ -485,7 +486,7 @@ class ThreePointPerspectiveGridExtension(Extension):
                 if clipped:
                     segments.append(clipped)
         else:                       # Finite VP – fan of rays
-            vp_x, vp_y = vp_info['vp']
+            vp_x, vp_y = vp['point']
             min_ang, max_ang = visible_angle_range(vp_x, vp_y, 0, 0, W, H)
             span = max_ang - min_ang
             num_lines = density * 2 if span > math.pi - 1e-9 else density
@@ -499,29 +500,20 @@ class ThreePointPerspectiveGridExtension(Extension):
                     segments.append(clipped)
         return segments
 
-    def generate_horizon(self, vp1_info, vp2_info, W, H):
-        if not vp1_info['is_inf'] and not vp2_info['is_inf']:
-            x1, y1 = vp1_info['vp']
-            x2, y2 = vp2_info['vp']
+    def generate_line_from_specs(self, p1, p2, W, H):
+        if not p1['is_inf'] and not p2['is_inf']:
+            x1, y1 = p1['point']
+            x2, y2 = p2['point']
             return clip_line(x1, y1, x2 - x1, y2 - y1, 0, 0, W, H)
-        elif vp1_info['is_inf'] and not vp2_info['is_inf']:
-            dx, dy = vp1_info['dir_2d']
-            x2, y2 = vp2_info['vp']
+        elif p1['is_inf'] and not p2['is_inf']:
+            dx, dy = p1['dir_2d']
+            x2, y2 = p2['point']
             return clip_line(x2, y2, dx, dy, 0, 0, W, H)
-        elif not vp1_info['is_inf'] and vp2_info['is_inf']:
-            x1, y1 = vp1_info['vp']
-            dx, dy = vp2_info['dir_2d']
+        elif not p1['is_inf'] and p2['is_inf']:
+            x1, y1 = p1['point']
+            dx, dy = p2['dir_2d']
             return clip_line(x1, y1, dx, dy, 0, 0, W, H)
         return None
-
-    def generate_vertical_center(self, vp3_info, cx, cy, W, H):
-        if not vp3_info['is_inf']:
-            dx = vp3_info['vp'][0] - cx
-            dy = vp3_info['vp'][1] - cy
-            return clip_line(cx, cy, dx, dy, 0, 0, W, H)
-        else:
-            dx, dy = vp3_info['dir_2d']
-            return clip_line(cx, cy, dx, dy, 0, 0, W, H)
 
 
 # Geometry helpers
