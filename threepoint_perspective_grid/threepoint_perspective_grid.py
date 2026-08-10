@@ -150,7 +150,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         bg = QColor(bg)
         r, g, b = bg.redF(), bg.greenF(), bg.blueF()
         def linearize(c):
-            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
         luminance = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
         return "#333333" if luminance > 0.179 else "#f4f4f4"
 
