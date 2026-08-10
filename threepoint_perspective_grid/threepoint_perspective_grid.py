@@ -409,12 +409,12 @@ class ThreePointPerspectiveGridExtension(Extension):
                 lines[name] = segments
 
         lines["AXES"] = []
-        horizon_line = self.generate_line_from_specs(vp["VP1"], vp["VP2"], W, H)
+        horizon_line = self.generate_line_from_two_vps(vp["VP1"], vp["VP2"], W, H)
         if horizon_line:
             lines["AXES"].append(horizon_line)
 
         vision_center = {"is_inf": False, "point": (cx, cy), "dir_2d": None}
-        vertical_center_line = self.generate_line_from_specs(vp["VP3"], vision_center, W, H)
+        vertical_center_line = self.generate_line_from_two_vps(vp["VP3"], vision_center, W, H)
         if vertical_center_line:
             lines["AXES"].append(vertical_center_line)
 
@@ -432,7 +432,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             v = vh[1] / vh[2]
             return {'is_inf': False, 'point': (u, v), 'dir_2d': None}
 
-    def generate_rays_from_vp(self, vp, W, H, density):
+    def generate_rays_from_vp(self, vp, W, H, num_lines):
         segments = []
         if vp['is_inf']:            # Parallel lines
             dx, dy = vp['dir_2d']
@@ -446,7 +446,6 @@ class ThreePointPerspectiveGridExtension(Extension):
             min_c = min(c_vals)
             max_c = max(c_vals)
 
-            num_lines = density
             step = (max_c - min_c) / num_lines
             for i in range(num_lines):
                 c = min_c + i * step
@@ -460,9 +459,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         else:                       # Finite VP – fan of rays
             vp_x, vp_y = vp['point']
             min_ang, max_ang = visible_angle_range(vp_x, vp_y, 0, 0, W, H)
-            span = max_ang - min_ang
-            num_lines = density * 2 if span > math.pi - 1e-9 else density
-            step = span / num_lines
+            step = (max_ang - min_ang) / num_lines
             for i in range(num_lines):
                 ang = min_ang + i * step
                 dx = math.cos(ang)
@@ -472,7 +469,7 @@ class ThreePointPerspectiveGridExtension(Extension):
                     segments.append(clipped)
         return segments
 
-    def generate_line_from_specs(self, p1, p2, W, H):
+    def generate_line_from_two_vps(self, p1, p2, W, H):
         if not p1['is_inf'] and not p2['is_inf']:
             x1, y1 = p1['point']
             x2, y2 = p2['point']
@@ -492,10 +489,8 @@ class ThreePointPerspectiveGridExtension(Extension):
 
 def visible_angle_range(x0, y0, xmin, ymin, xmax, ymax):
     """Return (min_angle, max_angle) in radians covering the canvas from given point."""
-    EPS = 1e-9
-    # If the point is inside the canvas, all directions are visible
-    if (xmin - EPS < x0 < xmax + EPS and ymin - EPS < y0 < ymax + EPS):
-        return 0, 2 * math.pi
+    if (xmin < x0 < xmax and ymin < y0 < ymax):     # inside the canvas
+        return 0, math.pi
 
     angles = []
     corners = [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)]
