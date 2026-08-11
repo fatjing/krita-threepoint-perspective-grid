@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QByteArray, QPointF
 from PyQt5.QtGui import QColor, QPainter, QPen, QImage
 from krita import Krita, Extension, DoubleSliderSpinBox, SliderSpinBox
-import math, json
+import math, json, copy
 
 class ThreePointPerspectiveGridDialog(QDialog):
     def __init__(self, params, defaults, preview_callback=None, parent=None):
@@ -70,22 +70,30 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.fov_spin.valueChanged.connect(self.request_preview)
         form.addRow("FOV", self.fov_spin)
 
-        # Vertical plane diagonals
-        diag_layout = QHBoxLayout()
+        # Diagonal vanishing points
+        dvp_layout = QVBoxLayout()
+        vert_dvp_layout = QHBoxLayout()
+
+        self.show_dvp_check = QCheckBox("Ground plane")
+        self.show_dvp_check.setChecked(self.params["show_dvp"])
+        self.show_dvp_check.setToolTip("Diagonal vp on ground plane")
+        self.show_dvp_check.stateChanged.connect(self.request_preview)
+        dvp_layout.addWidget(self.show_dvp_check)
 
         self.show_ldvp_check = QCheckBox("Left wall")
         self.show_ldvp_check.setChecked(self.params["show_ldvp"])
-        self.show_ldvp_check.setToolTip("Diagonal vp on vertical plane")
+        self.show_ldvp_check.setToolTip("Diagonal vp on left vertical plane")
         self.show_ldvp_check.stateChanged.connect(self.request_preview)
-        diag_layout.addWidget(self.show_ldvp_check)
+        vert_dvp_layout.addWidget(self.show_ldvp_check)
 
         self.show_rdvp_check = QCheckBox("Right wall")
         self.show_rdvp_check.setChecked(self.params["show_rdvp"])
-        self.show_rdvp_check.setToolTip("Diagonal vp on vertical plane")
+        self.show_rdvp_check.setToolTip("Diagonal vp on right vertical plane")
         self.show_rdvp_check.stateChanged.connect(self.request_preview)
-        diag_layout.addWidget(self.show_rdvp_check)
+        vert_dvp_layout.addWidget(self.show_rdvp_check)
 
-        form.addRow("Diagonal VP", diag_layout)
+        dvp_layout.addLayout(vert_dvp_layout)
+        form.addRow("Diagonal VP", dvp_layout)
 
         # Grid density
         self.grid_density_spin = SliderSpinBox().widget()
@@ -180,6 +188,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
             "pitch": self.pitch_spin.value(),
             "roll": self.roll_spin.value(),
             "fov": self.fov_spin.value(),
+            "show_dvp": self.show_dvp_check.isChecked(),
             "show_ldvp": self.show_ldvp_check.isChecked(),
             "show_rdvp": self.show_rdvp_check.isChecked(),
             "grid_density": self.grid_density_spin.value(),
@@ -194,6 +203,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.pitch_spin.setValue(d["pitch"])
         self.roll_spin.setValue(d["roll"])
         self.fov_spin.setValue(d["fov"])
+        self.show_dvp_check.setChecked(d["show_dvp"])
         self.show_ldvp_check.setChecked(d["show_ldvp"])
         self.show_rdvp_check.setChecked(d["show_rdvp"])
         self.grid_density_spin.setValue(d["grid_density"])
@@ -211,6 +221,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         "pitch": 0,
         "roll": 0,
         "fov": 78,
+        "show_dvp": True,
         "show_ldvp": False,
         "show_rdvp": False,
         "grid_density": 14,
@@ -244,10 +255,13 @@ class ThreePointPerspectiveGridExtension(Extension):
         action.triggered.connect(self.show_dialog)
 
     def load_settings(self):
-        params_json = Krita.instance().readSetting("ThreePointPerspectiveGrid", "params", "")
-        if params_json:
-            return json.loads(params_json)
-        return {k: (v.copy() if isinstance(v, dict) else v) for k, v in self.DEFAULT_PARAMS.items()}
+        raw_str = Krita.instance().readSetting("ThreePointPerspectiveGrid", "params", "")
+        if raw_str:
+            loaded = json.loads(raw_str)
+            result = {k: loaded.get(k, v) for k, v in self.DEFAULT_PARAMS.items()}
+            result["colors"] = {k: loaded["colors"].get(k, v) for k, v in self.DEFAULT_PARAMS["colors"].items()}
+            return result
+        return copy.deepcopy(self.DEFAULT_PARAMS)
 
     def save_settings(self, params):
         Krita.instance().writeSetting("ThreePointPerspectiveGrid", "params", json.dumps(params))
@@ -370,6 +384,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         roll = params["roll"]
         fov = params["fov"]
         density = params["grid_density"]
+        show_dvp = params["show_dvp"]
         show_ldvp = params["show_ldvp"]
         show_rdvp = params["show_rdvp"]
         cx = W / 2.0
@@ -396,7 +411,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         Drdvp = (1, vertical_vec, 0)            # right-wall diagonal (D2 + D3)
 
         d_list = [("RDVP", Drdvp, show_rdvp), ("LDVP", Dldvp, show_ldvp),
-                  ("DVP", Ddvp, True), ("VP3", D3, True),
+                  ("DVP", Ddvp, show_dvp), ("VP3", D3, True),
                   ("VP2", D2, True), ("VP1", D1, True)]     # correspond to draw order
         vp = {name: self.project_direction(D, R, K) for name, D, isShow in d_list if isShow}
 
