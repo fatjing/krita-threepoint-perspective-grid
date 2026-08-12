@@ -29,6 +29,15 @@ class ThreePointPerspectiveGridDialog(QDialog):
         layout = QVBoxLayout()
         form = QFormLayout()
 
+        # Field of view
+        self.fov_spin = DoubleSliderSpinBox().widget()
+        self.fov_spin.setRange(0.1, 179.9)
+        self.fov_spin.setValue(self.params['fov'])
+        self.fov_spin.setSuffix("°")
+        self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner")
+        self.fov_spin.valueChanged.connect(self.request_preview)
+        form.addRow("FOV", self.fov_spin)
+
         # Left vanishing point angle
         self.vp1_angle_spin = DoubleSliderSpinBox().widget()
         self.vp1_angle_spin.setRange(0.0, 90.0)
@@ -61,39 +70,42 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.roll_spin.valueChanged.connect(self.request_preview)
         form.addRow("Roll", self.roll_spin)
 
-        # Field of view
-        self.fov_spin = DoubleSliderSpinBox().widget()
-        self.fov_spin.setRange(0.1, 179.9)
-        self.fov_spin.setValue(self.params['fov'])
-        self.fov_spin.setSuffix("°")
-        self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner")
-        self.fov_spin.valueChanged.connect(self.request_preview)
-        form.addRow("FOV", self.fov_spin)
+        # Incline angle for auxiliary VPs
+        incline_layout = QHBoxLayout()
+        self.incline_spin = DoubleSliderSpinBox().widget()
+        self.incline_spin.setRange(-90.0, 90.0)
+        self.incline_spin.setValue(self.params["incline"])
+        self.incline_spin.setSingleStep(5)
+        self.incline_spin.setSuffix("°")
+        self.incline_spin.setToolTip("Incline angle for auxiliary vanishing points relative to the ground plane")
+        self.incline_spin.valueChanged.connect(self.request_preview)
+        incline_layout.addWidget(self.incline_spin)
 
-        # Diagonal vanishing points
-        dvp_layout = QVBoxLayout()
-        vert_dvp_layout = QHBoxLayout()
+        self.incline_flip_btn = QPushButton(Krita.instance().icon("view-refresh"), "")
+        self.incline_flip_btn.setFixedWidth(32)
+        self.incline_flip_btn.setToolTip("Flip the sign of the incline angle")
+        self.incline_flip_btn.clicked.connect(lambda: self.incline_spin.setValue(-self.incline_spin.value()))
+        incline_layout.addWidget(self.incline_flip_btn)
+        form.addRow("Incline", incline_layout)
 
-        self.show_dvp_check = QCheckBox("Ground plane")
+        # Auxiliary VPs
+        aux_layout = QHBoxLayout()
+        self.show_aux_lvp_check = QCheckBox("Aux. LVP")
+        self.show_aux_lvp_check.setChecked(self.params["show_aux_lvp"])
+        self.show_aux_lvp_check.stateChanged.connect(self.request_preview)
+        aux_layout.addWidget(self.show_aux_lvp_check)
+
+        self.show_aux_rvp_check = QCheckBox("Aux. RVP")
+        self.show_aux_rvp_check.setChecked(self.params["show_aux_rvp"])
+        self.show_aux_rvp_check.stateChanged.connect(self.request_preview)
+        aux_layout.addWidget(self.show_aux_rvp_check)
+        form.addRow("Auxiliary VP", aux_layout)
+
+        # Diagonal VP on the ground plane
+        self.show_dvp_check = QCheckBox("Ground plane diagonal")
         self.show_dvp_check.setChecked(self.params["show_dvp"])
-        self.show_dvp_check.setToolTip("Diagonal vp on ground plane")
         self.show_dvp_check.stateChanged.connect(self.request_preview)
-        dvp_layout.addWidget(self.show_dvp_check)
-
-        self.show_ldvp_check = QCheckBox("Left wall")
-        self.show_ldvp_check.setChecked(self.params["show_ldvp"])
-        self.show_ldvp_check.setToolTip("Diagonal vp on left vertical plane")
-        self.show_ldvp_check.stateChanged.connect(self.request_preview)
-        vert_dvp_layout.addWidget(self.show_ldvp_check)
-
-        self.show_rdvp_check = QCheckBox("Right wall")
-        self.show_rdvp_check.setChecked(self.params["show_rdvp"])
-        self.show_rdvp_check.setToolTip("Diagonal vp on right vertical plane")
-        self.show_rdvp_check.stateChanged.connect(self.request_preview)
-        vert_dvp_layout.addWidget(self.show_rdvp_check)
-
-        dvp_layout.addLayout(vert_dvp_layout)
-        form.addRow("Diagonal VP", dvp_layout)
+        form.addRow("", self.show_dvp_check)
 
         # Grid density
         self.grid_density_spin = SliderSpinBox().widget()
@@ -184,13 +196,14 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
     def get_current_params(self):
         return {
+            "fov": self.fov_spin.value(),
             "vp1_angle": self.vp1_angle_spin.value(),
             "pitch": self.pitch_spin.value(),
             "roll": self.roll_spin.value(),
-            "fov": self.fov_spin.value(),
+            "incline": self.incline_spin.value(),
+            "show_aux_lvp": self.show_aux_lvp_check.isChecked(),
+            "show_aux_rvp": self.show_aux_rvp_check.isChecked(),
             "show_dvp": self.show_dvp_check.isChecked(),
-            "show_ldvp": self.show_ldvp_check.isChecked(),
-            "show_rdvp": self.show_rdvp_check.isChecked(),
             "grid_density": self.grid_density_spin.value(),
             "line_width": self.line_width_spin.value(),
             "line_opacity": self.line_opacity_spin.value(),
@@ -199,13 +212,14 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
     def reset_to_defaults(self):
         d = self.defaults
+        self.fov_spin.setValue(d["fov"])
         self.vp1_angle_spin.setValue(d["vp1_angle"])
         self.pitch_spin.setValue(d["pitch"])
         self.roll_spin.setValue(d["roll"])
-        self.fov_spin.setValue(d["fov"])
+        self.incline_spin.setValue(d["incline"])
+        self.show_aux_lvp_check.setChecked(d["show_aux_lvp"])
+        self.show_aux_rvp_check.setChecked(d["show_aux_rvp"])
         self.show_dvp_check.setChecked(d["show_dvp"])
-        self.show_ldvp_check.setChecked(d["show_ldvp"])
-        self.show_rdvp_check.setChecked(d["show_rdvp"])
         self.grid_density_spin.setValue(d["grid_density"])
         self.line_width_spin.setValue(d["line_width"])
         self.line_opacity_spin.setValue(d["line_opacity"])
@@ -217,13 +231,14 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
 class ThreePointPerspectiveGridExtension(Extension):
     DEFAULT_PARAMS = {
+        "fov": 78,
         "vp1_angle": 30,
         "pitch": 0,
         "roll": 0,
-        "fov": 78,
+        "incline": -45,
+        "show_aux_lvp": False,
+        "show_aux_rvp": False,
         "show_dvp": True,
-        "show_ldvp": False,
-        "show_rdvp": False,
         "grid_density": 14,
         "line_width": 1,
         "line_opacity": 1.0,
@@ -232,8 +247,8 @@ class ThreePointPerspectiveGridExtension(Extension):
             "VP2":  "#acb8ff",
             "VP3":  "#e99df5",
             "DVP":  "#f3dc85",
-            "LDVP": "#c0eac7",
-            "RDVP": "#afeaea",
+            "ALVP": "#c0eac7",
+            "ARVP": "#afeaea",
             "AXES": "#bdc4cb",
         }
     }
@@ -379,14 +394,15 @@ class ThreePointPerspectiveGridExtension(Extension):
 
     def compute_grid_lines(self, params, W, H):
         """Generate grid using a 3D camera matrix."""
+        fov = params["fov"]
         vp1_angle = params["vp1_angle"]
         pitch = params["pitch"]
         roll = params["roll"]
-        fov = params["fov"]
-        density = params["grid_density"]
+        incline = params["incline"]
+        show_aux_lvp = params.get("show_aux_lvp", False)
+        show_aux_rvp = params.get("show_aux_rvp", False)
         show_dvp = params["show_dvp"]
-        show_ldvp = params["show_ldvp"]
-        show_rdvp = params["show_rdvp"]
+        density = params["grid_density"]
         cx = W / 2.0
         cy = H / 2.0
 
@@ -405,13 +421,13 @@ class ThreePointPerspectiveGridExtension(Extension):
         D1 = (0, 0, 1)          # forward -> VP1
         D2 = (1, 0, 0)          # right   -> VP2
         D3 = (0, 1, 0)          # up      -> VP3
-        Ddvp = (1, 0, 1)        # ground-plane diagonal (D1 + D2)
-        vertical_vec = -1 if pitch < 0 else 1   # wall diagonal pointing up or down
-        Dldvp = (0, vertical_vec, 1)            # left-wall diagonal (D1 + D3)
-        Drdvp = (1, vertical_vec, 0)            # right-wall diagonal (D2 + D3)
+        D_dvp = (1, 0, 1)       # ground-plane diagonal (D1 + D2)
+        a = math.radians(incline)
+        D_alvp = (0, math.sin(a), math.cos(a))      # forward + up, angle alpha from horizontal
+        D_arvp = (math.cos(a), math.sin(a), 0)      # right + up, angle alpha from horizontal
 
-        d_list = [("RDVP", Drdvp, show_rdvp), ("LDVP", Dldvp, show_ldvp),
-                  ("DVP", Ddvp, show_dvp), ("VP3", D3, True),
+        d_list = [("ARVP", D_arvp, show_aux_rvp), ("ALVP", D_alvp, show_aux_lvp),
+                  ("DVP", D_dvp, show_dvp), ("VP3", D3, True),
                   ("VP2", D2, True), ("VP1", D1, True)]     # correspond to draw order
         vp = {name: self.project_direction(D, R, K) for name, D, isShow in d_list if isShow}
 
