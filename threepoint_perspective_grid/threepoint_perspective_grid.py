@@ -394,41 +394,42 @@ class ThreePointPerspectiveGridExtension(Extension):
 
     def compute_grid_lines(self, params, W, H):
         """Generate grid using a 3D camera matrix."""
-        fov = params["fov"]
-        vp1_angle = params["vp1_angle"]
-        pitch = params["pitch"]
-        roll = params["roll"]
-        incline = params["incline"]
-        show_aux_lvp = params.get("show_aux_lvp", False)
-        show_aux_rvp = params.get("show_aux_rvp", False)
-        show_dvp = params["show_dvp"]
-        density = params["grid_density"]
+        fov          = math.radians(params["fov"])
+        vp1_angle    = math.radians(params["vp1_angle"])
+        pitch        = math.radians(params["pitch"])
+        roll         = math.radians(params["roll"])
+        incline      = math.radians(params["incline"])
+        show_aux_lvp = params["show_aux_lvp"]
+        show_aux_rvp = params["show_aux_rvp"]
+        show_dvp     = params["show_dvp"]
+        density      = params["grid_density"]
         cx = W / 2.0
         cy = H / 2.0
 
         # Focal length from diagonal field of view
-        f = (math.hypot(W, H) / 2.0) / math.tan(math.radians(fov / 2.0))
+        f = (math.hypot(W, H) / 2.0) / math.tan(fov / 2.0)
 
         # Intrinsic matrix K
         K = [[f, 0, cx], [0, f, cy], [0, 0, 1]]
 
-        # Camera rotation: yaw around Y -> pitch around X -> roll around Z
-        R = mat_mat_mul(Rz(math.radians(roll)),
-            mat_mat_mul(Rx(math.radians(pitch)),
-                        Ry(math.radians(-vp1_angle))))
+        # Camera rotation: yaw -> pitch -> roll. Negate angles to rotate the camera itself
+        R = mat_mat_mul(Rz(-roll), mat_mat_mul(Rx(-pitch), Ry(-vp1_angle)))
 
-        # World grid directions (X-Right, Y-Up, Z-Forward)
+        # World grid directions (X-Right, Y-Down, Z-Forward)
         D1 = (0, 0, 1)          # forward -> VP1
         D2 = (1, 0, 0)          # right   -> VP2
-        D3 = (0, 1, 0)          # up      -> VP3
-        D_dvp = (1, 0, 1)       # ground-plane diagonal (D1 + D2)
-        a = math.radians(incline)
-        D_alvp = (0, math.sin(a), math.cos(a))      # forward + up, angle alpha from horizontal
-        D_arvp = (math.cos(a), math.sin(a), 0)      # right + up, angle alpha from horizontal
+        D3 = (0, 1, 0)          # down    -> VP3
+        D_dvp = (1, 0, 1)       # forward + right, ground-plane diagonal
+        D_alvp = (0, -math.sin(incline), math.cos(incline))     # forward + up, angle alpha from ground plane
+        D_arvp = (math.cos(incline), -math.sin(incline), 0)     # right + up, angle alpha from ground plane
 
-        d_list = [("ARVP", D_arvp, show_aux_rvp), ("ALVP", D_alvp, show_aux_lvp),
-                  ("DVP", D_dvp, show_dvp), ("VP3", D3, True),
-                  ("VP2", D2, True), ("VP1", D1, True)]     # correspond to draw order
+        d_list = [      # list order and draw order correspond
+            ("ARVP", D_arvp, show_aux_rvp),
+            ("ALVP", D_alvp, show_aux_lvp),
+            ("DVP", D_dvp, show_dvp),
+            ("VP3", D3, True),
+            ("VP2", D2, True),
+            ("VP1", D1, True),]
         vp = {name: self.project_direction(D, R, K) for name, D, isShow in d_list if isShow}
 
         lines = {}
@@ -453,9 +454,9 @@ class ThreePointPerspectiveGridExtension(Extension):
 
     def project_direction(self, D, R, K):
         """ Project a world direction vector D into the image plane. """
-        v_cam = mat_vec_mul(R, D)
-        vh = mat_vec_mul(K, v_cam)
-        if abs(vh[2]) < 1e-9:   # Direction parallel to image plane -> infinite VP
+        v_cam = mat_vec_mul(R, D)       # world -> camera
+        vh = mat_vec_mul(K, v_cam)      # camera -> image plane
+        if abs(vh[2]) < 1e-9:           # infinite VP, direction parallel to image plane
             dir_2d = (v_cam[0], v_cam[1])
             return {'is_inf': True, 'point': None, 'dir_2d': dir_2d}
         else:
