@@ -34,6 +34,11 @@ You get a live preview while tweaking the sliders, and when you click OK the gri
 | **Roll** | Camera roll. Rotates the whole grid around the view axis. |
 | **Incline** | Angle of the auxiliary vanishing points relative to the ground plane. Used for inclined planes. |
 
+## Diagrams
+The following diagrams illustrate how perspective grids are constructed traditionally. They are conceptual references intended to help you build intuition for what those parameters do. (Internally, the plugin uses a pinhole camera model to compute the perspective projection.)
+![2-point-perspective](assets/2-point.png)
+![3-point-perspective](assets/3-point.png)
+
 ## License
 
 MIT License
