@@ -77,7 +77,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.incline_spin.setValue(self.params["incline"])
         self.incline_spin.setSingleStep(5)
         self.incline_spin.setSuffix("°")
-        self.incline_spin.setToolTip("Incline angle for auxiliary vanishing points relative to the ground plane")
+        self.incline_spin.setToolTip("Incline angle for auxiliary VPs relative to the ground plane")
         self.incline_spin.valueChanged.connect(self.request_preview)
         incline_layout.addWidget(self.incline_spin)
 
@@ -89,23 +89,47 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form.addRow("Incline", incline_layout)
 
         # Auxiliary VPs
-        aux_layout = QHBoxLayout()
         self.show_aux_lvp_check = QCheckBox("Aux. LVP")
         self.show_aux_lvp_check.setChecked(self.params["show_aux_lvp"])
+        self.show_aux_lvp_check.setToolTip("Auxiliary VP for inclined plane")
         self.show_aux_lvp_check.stateChanged.connect(self.request_preview)
-        aux_layout.addWidget(self.show_aux_lvp_check)
 
         self.show_aux_rvp_check = QCheckBox("Aux. RVP")
         self.show_aux_rvp_check.setChecked(self.params["show_aux_rvp"])
+        self.show_aux_rvp_check.setToolTip("Auxiliary VP for inclined plane")
         self.show_aux_rvp_check.stateChanged.connect(self.request_preview)
-        aux_layout.addWidget(self.show_aux_rvp_check)
-        form.addRow("Auxiliary VP", aux_layout)
+
+        # Measuring points
+        self.show_lmp_check = QCheckBox("LMP")
+        self.show_lmp_check.setChecked(self.params["show_lmp"])
+        self.show_lmp_check.setToolTip("Measuring point for LVP")
+        self.show_lmp_check.stateChanged.connect(self.request_preview)
+
+        self.show_rmp_check = QCheckBox("RMP")
+        self.show_rmp_check.setChecked(self.params["show_rmp"])
+        self.show_rmp_check.setToolTip("Measuring point for RVP")
+        self.show_rmp_check.stateChanged.connect(self.request_preview)
 
         # Diagonal VP on the ground plane
-        self.show_dvp_check = QCheckBox("Ground plane diagonal")
+        self.show_dvp_check = QCheckBox("DVP")
         self.show_dvp_check.setChecked(self.params["show_dvp"])
+        self.show_dvp_check.setToolTip("Ground plane diagonal")
         self.show_dvp_check.stateChanged.connect(self.request_preview)
-        form.addRow("", self.show_dvp_check)
+
+        # Axes through the vision center
+        self.show_axes_check = QCheckBox("Axes")
+        self.show_axes_check.setChecked(self.params["show_axes"])
+        self.show_axes_check.setToolTip("Horizontal and vertical axes through the vision center")
+        self.show_axes_check.stateChanged.connect(self.request_preview)
+
+        toggles_grid = QGridLayout()
+        toggles_grid.addWidget(self.show_aux_lvp_check, 0, 0)
+        toggles_grid.addWidget(self.show_aux_rvp_check, 0, 1)
+        toggles_grid.addWidget(self.show_lmp_check,     1, 0)
+        toggles_grid.addWidget(self.show_rmp_check,     1, 1)
+        toggles_grid.addWidget(self.show_dvp_check,     2, 0)
+        toggles_grid.addWidget(self.show_axes_check,    2, 1)
+        form.addRow("Toggles", toggles_grid)
 
         # Grid density
         self.grid_density_spin = SliderSpinBox().widget()
@@ -203,7 +227,10 @@ class ThreePointPerspectiveGridDialog(QDialog):
             "incline": self.incline_spin.value(),
             "show_aux_lvp": self.show_aux_lvp_check.isChecked(),
             "show_aux_rvp": self.show_aux_rvp_check.isChecked(),
+            "show_lmp": self.show_lmp_check.isChecked(),
+            "show_rmp": self.show_rmp_check.isChecked(),
             "show_dvp": self.show_dvp_check.isChecked(),
+            "show_axes": self.show_axes_check.isChecked(),
             "grid_density": self.grid_density_spin.value(),
             "line_width": self.line_width_spin.value(),
             "line_opacity": self.line_opacity_spin.value(),
@@ -219,7 +246,10 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.incline_spin.setValue(d["incline"])
         self.show_aux_lvp_check.setChecked(d["show_aux_lvp"])
         self.show_aux_rvp_check.setChecked(d["show_aux_rvp"])
+        self.show_lmp_check.setChecked(d["show_lmp"])
+        self.show_rmp_check.setChecked(d["show_rmp"])
         self.show_dvp_check.setChecked(d["show_dvp"])
+        self.show_axes_check.setChecked(d["show_axes"])
         self.grid_density_spin.setValue(d["grid_density"])
         self.line_width_spin.setValue(d["line_width"])
         self.line_opacity_spin.setValue(d["line_opacity"])
@@ -238,7 +268,10 @@ class ThreePointPerspectiveGridExtension(Extension):
         "incline": -45,
         "show_aux_lvp": False,
         "show_aux_rvp": False,
+        "show_lmp": False,
+        "show_rmp": False,
         "show_dvp": True,
+        "show_axes": True,
         "grid_density": 14,
         "line_width": 1,
         "line_opacity": 1.0,
@@ -247,6 +280,8 @@ class ThreePointPerspectiveGridExtension(Extension):
             "VP2":  "#acb8ff",
             "VP3":  "#e99df5",
             "DVP":  "#f3dc85",
+            "LMP":  "#f9d1dc",
+            "RMP":  "#f9d3e5",
             "ALVP": "#c0eac7",
             "ARVP": "#afeaea",
             "HL":   "#bdc4cb",
@@ -402,7 +437,10 @@ class ThreePointPerspectiveGridExtension(Extension):
         incline      = math.radians(params["incline"])
         show_aux_lvp = params["show_aux_lvp"]
         show_aux_rvp = params["show_aux_rvp"]
+        show_lmp     = params["show_lmp"]
+        show_rmp     = params["show_rmp"]
         show_dvp     = params["show_dvp"]
+        show_axes    = params["show_axes"]
         density      = params["grid_density"]
         cx = W / 2.0
         cy = H / 2.0
@@ -421,12 +459,20 @@ class ThreePointPerspectiveGridExtension(Extension):
         D2 = (1, 0, 0)          # right   -> VP2
         D3 = (0, 1, 0)          # down    -> VP3
         D_dvp = (1, 0, 1)       # forward + right, ground-plane diagonal
+
+        half1 = vp1_angle / 2
+        half2 = (math.pi/2 - vp1_angle) / 2
+        D_lmp = (math.cos(half2), 0, math.sin(half2))           # left measuring point
+        D_rmp = (math.sin(half1), 0, math.cos(half1))           # right measuring point
+
         D_alvp = (0, -math.sin(incline), math.cos(incline))     # forward + up, angle alpha from ground plane
         D_arvp = (math.cos(incline), -math.sin(incline), 0)     # right + up, angle alpha from ground plane
 
         d_list = [      # list order and draw order correspond
             ("ARVP", D_arvp, show_aux_rvp),
             ("ALVP", D_alvp, show_aux_lvp),
+            ("RMP", D_rmp, show_rmp),
+            ("LMP", D_lmp, show_lmp),
             ("DVP", D_dvp, show_dvp),
             ("VP3", D3, True),
             ("VP2", D2, True),
@@ -448,12 +494,12 @@ class ThreePointPerspectiveGridExtension(Extension):
         lines["AXES"] = []
         vision_center = {"is_inf": False, "point": (cx, cy), "dir_2d": None}
         axis_y = self.generate_line_from_two_vps(vp["VP3"], vision_center, W, H)
-        if axis_y:
+        if axis_y and show_axes:
             lines["AXES"].append(axis_y)
 
         dx, dy = self.direction_from_two_vps(vp["VP1"], vp["VP2"])
         axis_x = clip_line(cx, cy, dx, dy, 0, 0, W, H)
-        if axis_x:
+        if axis_x and show_axes:
             lines["AXES"].append(axis_x)
 
         return lines
