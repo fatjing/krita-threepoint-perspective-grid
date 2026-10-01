@@ -341,7 +341,7 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         W, H = doc.width(), doc.height()
         image = self.build_qimage(params, W, H)
-        image = image.convertToFormat(QImage.Format_RGBA8888).rgbSwapped()
+        image = image.convertToFormat(QImage.Format_ARGB32)
         raw_bytes = image.constBits().asstring(image.sizeInBytes())
 
         self.preview_layer.setPixelData(QByteArray(raw_bytes), 0, 0, W, H)
