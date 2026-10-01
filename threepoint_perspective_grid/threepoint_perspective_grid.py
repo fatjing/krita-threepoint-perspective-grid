@@ -249,6 +249,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             "DVP":  "#f3dc85",
             "ALVP": "#c0eac7",
             "ARVP": "#afeaea",
+            "HL":   "#bdc4cb",
             "AXES": "#bdc4cb",
         }
     }
@@ -440,15 +441,20 @@ class ThreePointPerspectiveGridExtension(Extension):
             if segments:
                 lines[name] = segments
 
-        lines["AXES"] = []
         horizon_line = self.generate_line_from_two_vps(vp["VP1"], vp["VP2"], W, H)
         if horizon_line:
-            lines["AXES"].append(horizon_line)
+            lines["HL"] = [horizon_line]
 
+        lines["AXES"] = []
         vision_center = {"is_inf": False, "point": (cx, cy), "dir_2d": None}
-        vertical_center_line = self.generate_line_from_two_vps(vp["VP3"], vision_center, W, H)
-        if vertical_center_line:
-            lines["AXES"].append(vertical_center_line)
+        axis_y = self.generate_line_from_two_vps(vp["VP3"], vision_center, W, H)
+        if axis_y:
+            lines["AXES"].append(axis_y)
+
+        dx, dy = self.direction_from_two_vps(vp["VP1"], vp["VP2"])
+        axis_x = clip_line(cx, cy, dx, dy, 0, 0, W, H)
+        if axis_x:
+            lines["AXES"].append(axis_x)
 
         return lines
 
@@ -489,32 +495,40 @@ class ThreePointPerspectiveGridExtension(Extension):
                 if clipped:
                     segments.append(clipped)
         else:                       # Finite VP – fan of rays
-            vp_x, vp_y = vp['point']
-            min_ang, max_ang = visible_angle_range(vp_x, vp_y, 0, 0, W, H)
+            px, py = vp['point']
+            min_ang, max_ang = visible_angle_range(px, py, 0, 0, W, H)
             step = (max_ang - min_ang) / num_lines
             for i in range(num_lines):
                 ang = min_ang + i * step
                 dx = math.cos(ang)
                 dy = math.sin(ang)
-                clipped = clip_line(vp_x, vp_y, dx, dy, 0, 0, W, H)
+                clipped = clip_line(px, py, dx, dy, 0, 0, W, H)
                 if clipped:
                     segments.append(clipped)
         return segments
 
     def generate_line_from_two_vps(self, p1, p2, W, H):
+        px, py = 0, 0
+        if not p1['is_inf']:
+            px, py = p1['point']
+        elif not p2['is_inf']:
+            px, py = p2['point']
+        else:
+            return None
+        dx, dy = self.direction_from_two_vps(p1, p2)
+        return clip_line(px, py, dx, dy, 0, 0, W, H)
+
+    def direction_from_two_vps(self, p1, p2):
+        dx, dy = 0, 0
         if not p1['is_inf'] and not p2['is_inf']:
             x1, y1 = p1['point']
             x2, y2 = p2['point']
-            return clip_line(x1, y1, x2 - x1, y2 - y1, 0, 0, W, H)
+            dx, dy = x2 - x1, y2 - y1
         elif p1['is_inf'] and not p2['is_inf']:
             dx, dy = p1['dir_2d']
-            x2, y2 = p2['point']
-            return clip_line(x2, y2, dx, dy, 0, 0, W, H)
         elif not p1['is_inf'] and p2['is_inf']:
-            x1, y1 = p1['point']
             dx, dy = p2['dir_2d']
-            return clip_line(x1, y1, dx, dy, 0, 0, W, H)
-        return None
+        return dx, dy
 
 
 # Geometry helpers
