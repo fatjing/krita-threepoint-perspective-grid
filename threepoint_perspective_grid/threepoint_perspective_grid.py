@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
     QLabel,
     QPushButton,
+    QWidget,
 )
 from PyQt5.QtCore import Qt, QTimer, QByteArray, QPointF
 from PyQt5.QtGui import QColor, QPainter, QPen, QImage
@@ -154,9 +155,14 @@ class ThreePointPerspectiveGridDialog(QDialog):
         form.addRow("Line opacity", self.line_opacity_spin)
 
         # Color pickers
+        self.colors_label_btn = QPushButton("⯈ Colors")
+        self.colors_label_btn.setStyleSheet("text-align: left; border: none; background: transparent")
+        self.colors_label_btn.clicked.connect(self.toggle_color_settings)
+
         self.colors = {k: v for k, v in self.params['colors'].items()}
         self.color_buttons = {}
         color_grid = QGridLayout()
+        color_grid.setContentsMargins(0, 0, 0, 0)
         for i, (target, color) in enumerate(self.colors.items()):
             btn = QPushButton(target)
             fg = self.contrasting_text_color(color)
@@ -164,7 +170,12 @@ class ThreePointPerspectiveGridDialog(QDialog):
             btn.clicked.connect(lambda _, t=target: self.pick_color(t))
             color_grid.addWidget(btn, i // 2, i % 2)
             self.color_buttons[target] = btn
-        form.addRow("Colors", color_grid)
+
+        self.colors_expanded = False
+        self.colors_container = QWidget()
+        self.colors_container.setVisible(self.colors_expanded)
+        self.colors_container.setLayout(color_grid)
+        form.addRow(self.colors_label_btn, self.colors_container)
 
         layout.addLayout(form)
 
@@ -181,6 +192,12 @@ class ThreePointPerspectiveGridDialog(QDialog):
         layout.addLayout(buttons_layout)
 
         self.setLayout(layout)
+
+    def toggle_color_settings(self):
+        self.colors_expanded = not self.colors_expanded
+        self.colors_label_btn.setText(("⯆ " if self.colors_expanded else "⯈ ") + "Colors")
+        self.colors_container.setVisible(self.colors_expanded)
+        QTimer.singleShot(0, self.adjustSize)
 
     def pick_color(self, target):
         color = QColorDialog.getColor(QColor(self.colors[target]), self, f"Pick color for {target}")
