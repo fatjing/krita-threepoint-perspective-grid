@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QWidget,
     QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QTimer, QByteArray, QPointF
+from PyQt5.QtCore import Qt, QTimer, QByteArray, QLineF
 from PyQt5.QtGui import QColor, QPainter, QPen, QImage
 from krita import Krita, Extension, DoubleSliderSpinBox, SliderSpinBox
 import math, json, copy
@@ -434,23 +434,22 @@ class ThreePointPerspectiveGridExtension(Extension):
         doc.refreshProjection()
 
     def build_qimage(self, params, width, height):
+        lines = self.compute_grid_lines(params, width, height)
+        line_width = params["line_width"]
+        line_opacity = params["line_opacity"]
+        colors = params["colors"]
+
         image = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
         image.fill(Qt.transparent)
         painter = QPainter(image)
         painter.setRenderHint(QPainter.Antialiasing, True)
-
-        lines = self.compute_grid_lines(params, width, height)
-        colors = params["colors"]
-        line_width = params["line_width"]
-        opacity = params["line_opacity"]
+        painter.setOpacity(line_opacity)
 
         for name, segments in lines.items():
             pen = QPen(QColor(colors[name]), line_width)
-            pen.setCosmetic(True)
             painter.setPen(pen)
-            painter.setOpacity(opacity)
-            for x1, y1, x2, y2 in segments:
-                painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+            qlines = [QLineF(x1, y1, x2, y2) for x1, y1, x2, y2 in segments]
+            painter.drawLines(qlines)
 
         painter.end()
         return image
