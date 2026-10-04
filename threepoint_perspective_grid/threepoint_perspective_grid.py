@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QPushButton,
     QWidget,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer, QByteArray, QPointF
 from PyQt5.QtGui import QColor, QPainter, QPen, QImage
@@ -29,6 +30,31 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
         layout = QVBoxLayout()
         form = QFormLayout()
+
+        # Center of vision
+        cv_layout = QHBoxLayout()
+        self.center_x_spin = DoubleSliderSpinBox().widget()
+        self.center_x_spin.setRange(0.0, 100.0)
+        self.center_x_spin.setValue(self.params['center_x'])
+        self.center_x_spin.setSuffix("%")
+        self.center_x_spin.setToolTip("x coordinate of Center Of Vision as percentage of canvas width")
+        self.center_x_spin.valueChanged.connect(self.request_preview)
+        center_x_label = QLabel("x")
+        center_x_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        cv_layout.addWidget(center_x_label)
+        cv_layout.addWidget(self.center_x_spin)
+
+        self.center_y_spin = DoubleSliderSpinBox().widget()
+        self.center_y_spin.setRange(0.0, 100.0)
+        self.center_y_spin.setValue(self.params['center_y'])
+        self.center_y_spin.setSuffix("%")
+        self.center_y_spin.setToolTip("y coordinate of Center Of Vision as percentage of canvas height")
+        self.center_y_spin.valueChanged.connect(self.request_preview)
+        center_y_label = QLabel("y")
+        center_y_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        cv_layout.addWidget(center_y_label)
+        cv_layout.addWidget(self.center_y_spin)
+        form.addRow("CV", cv_layout)
 
         # Field of view
         self.fov_spin = DoubleSliderSpinBox().widget()
@@ -237,6 +263,8 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
     def get_current_params(self):
         return {
+            "center_x": self.center_x_spin.value(),
+            "center_y": self.center_y_spin.value(),
             "fov": self.fov_spin.value(),
             "vp1_angle": self.vp1_angle_spin.value(),
             "pitch": self.pitch_spin.value(),
@@ -256,6 +284,8 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
     def reset_to_defaults(self):
         d = self.defaults
+        self.center_x_spin.setValue(d["center_x"])
+        self.center_y_spin.setValue(d["center_y"])
         self.fov_spin.setValue(d["fov"])
         self.vp1_angle_spin.setValue(d["vp1_angle"])
         self.pitch_spin.setValue(d["pitch"])
@@ -279,6 +309,8 @@ class ThreePointPerspectiveGridDialog(QDialog):
 
 class ThreePointPerspectiveGridExtension(Extension):
     DEFAULT_PARAMS = {
+        "center_x": 50.0,
+        "center_y": 50.0,
         "fov": 78,
         "vp1_angle": 30,
         "pitch": 0,
@@ -460,8 +492,8 @@ class ThreePointPerspectiveGridExtension(Extension):
         show_dvp     = params["show_dvp"]
         show_axes    = params["show_axes"]
         density      = params["grid_density"]
-        cx = W / 2.0
-        cy = H / 2.0
+        cx = W * (params["center_x"] / 100.0)
+        cy = H * (params["center_y"] / 100.0)
 
         # Focal length from diagonal field of view
         f = (math.hypot(W, H) / 2.0) / math.tan(fov / 2.0)
@@ -501,7 +533,7 @@ class ThreePointPerspectiveGridExtension(Extension):
 
         # Generate rays for each VP
         for name, vp_info in vp.items():
-            segments = self.generate_rays_from_vp(vp_info, W, H, density)
+            segments = self.generate_rays_from_vp(vp_info, cx, cy, W, H, density)
             if segments:
                 lines[name] = segments
 
@@ -534,13 +566,12 @@ class ThreePointPerspectiveGridExtension(Extension):
             v = vh[1] / vh[2]
             return {'is_inf': False, 'point': (u, v), 'dir_2d': None}
 
-    def generate_rays_from_vp(self, vp, W, H, num_lines):
+    def generate_rays_from_vp(self, vp, cx, cy, W, H, num_lines):
         segments = []
         if vp['is_inf']:            # Parallel lines
             dx, dy = vp['dir_2d']
             dx_p, dy_p = -dy, dx    # Normal perpendicular to the line direction
-            cx, cy = W / 2.0, H / 2.0
-            c0 = dx_p * cx + dy_p * cy  # Normal coordinate at the image center
+            c0 = dx_p * cx + dy_p * cy  # Normal coordinate at the vision center
 
             # Range of normal coordinate across the canvas corners
             corners = [(0, 0), (W, 0), (W, H), (0, H)]
