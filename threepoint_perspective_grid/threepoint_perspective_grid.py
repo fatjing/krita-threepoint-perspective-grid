@@ -257,6 +257,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
             self.colors[target] = color
             fg = self.contrasting_text_color(color)
             self.color_buttons[target].setStyleSheet(f"background-color: {color}; color: {fg}")
+        self.request_preview()
 
 
 class ThreePointPerspectiveGridExtension(Extension):
