@@ -334,7 +334,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             "RMP":  "#f9d3e5",
             "ALVP": "#c0eac7",
             "ARVP": "#afeaea",
-            "HL":   "#bdc4cb",
+            "HL":   "#a2adb9",
             "AXES": "#bdc4cb",
         }
     }
@@ -536,10 +536,6 @@ class ThreePointPerspectiveGridExtension(Extension):
             if segments:
                 lines[name] = segments
 
-        horizon_line = self.generate_line_from_two_vps(vp["VP1"], vp["VP2"], W, H)
-        if horizon_line:
-            lines["HL"] = [horizon_line]
-
         lines["AXES"] = []
         vision_center = {"is_inf": False, "point": (cx, cy), "dir_2d": None}
         axis_y = self.generate_line_from_two_vps(vp["VP3"], vision_center, W, H)
@@ -550,6 +546,10 @@ class ThreePointPerspectiveGridExtension(Extension):
         axis_x = clip_line(cx, cy, dx, dy, 0, 0, W, H)
         if axis_x and show_axes:
             lines["AXES"].append(axis_x)
+
+        horizon_line = self.generate_line_from_two_vps(vp["VP1"], vp["VP2"], W, H)
+        if horizon_line:
+            lines["HL"] = [horizon_line]
 
         return lines
 
