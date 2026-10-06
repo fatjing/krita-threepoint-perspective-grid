@@ -421,6 +421,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         if not self.preview_layer:
             previous_node = doc.activeNode()
             self.preview_layer = doc.createNode(layer_name, "paintlayer")
+            self.preview_layer.setColorSpace("RGBA", "U8", "sRGB-elle-V2-srgbtrc.icc")
             doc.rootNode().addChildNode(self.preview_layer, None)
             if previous_node:
                 doc.setActiveNode(previous_node)
