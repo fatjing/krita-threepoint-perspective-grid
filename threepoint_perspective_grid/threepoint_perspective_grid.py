@@ -34,7 +34,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         # Center of vision
         cv_layout = QHBoxLayout()
         self.center_x_spin = DoubleSliderSpinBox().widget()
-        self.center_x_spin.setRange(0.0, 100.0)
+        self.center_x_spin.setRange(-50.0, 150.0)
         self.center_x_spin.setValue(self.params['center_x'])
         self.center_x_spin.setSuffix("%")
         self.center_x_spin.setToolTip("x coordinate of Center Of Vision as percentage of canvas width")
@@ -45,7 +45,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         cv_layout.addWidget(self.center_x_spin)
 
         self.center_y_spin = DoubleSliderSpinBox().widget()
-        self.center_y_spin.setRange(0.0, 100.0)
+        self.center_y_spin.setRange(-50.0, 150.0)
         self.center_y_spin.setValue(self.params['center_y'])
         self.center_y_spin.setSuffix("%")
         self.center_y_spin.setToolTip("y coordinate of Center Of Vision as percentage of canvas height")
