@@ -7,7 +7,7 @@ You get a live preview while tweaking the sliders, and when you click OK the gri
 ## Features
 
 - Full camera control with adjustable FOV, yaw, pitch and roll
-- Configurable auxiliary vanishing points for drawing sloped surfaces
+- Built-in reference point support, including diagonal vanishing point, left/right measuring points, and configurable auxiliary vanishing points for drawing sloped surfaces
 - Customizable appearance settings for grid lines
 - Smooth live preview while adjusting parameters
 
@@ -27,8 +27,9 @@ You get a live preview while tweaking the sliders, and when you click OK the gri
 
 | Parameter | Description |
 |---|---|
+| **CV** | Center of Vision. X and Y coordinates as percentage of canvas width and height. |
 | **FOV** | Diagonal field of view. Spans the canvas from corner to corner. Smaller values = telephoto (zoomed in, vanishing points farther away/off-canvas). Larger values = wide-angle (zoomed out, stronger distortion, vanishing points closer to the canvas center). |
-| **LVP angle** | Camera yaw. The angle from the viewing direction to the left set of grid lines. |
+| **LVP angle** | Camera yaw. The angle from the viewing direction to the left vanishing point. |
 | **RVP angle** | Automatically kept at `90° − LVP angle` - the two vanishing points are perpendicular in a 3-point setup. |
 | **Pitch** | Camera pitch. Controls whether the viewer is looking up or down. |
 | **Roll** | Camera roll. Rotates the whole grid around the view axis. |
