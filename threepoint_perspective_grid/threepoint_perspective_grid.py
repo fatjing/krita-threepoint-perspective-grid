@@ -37,7 +37,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.center_x_spin.setRange(-50.0, 150.0)
         self.center_x_spin.setValue(self.params['center_x'])
         self.center_x_spin.setSuffix("%")
-        self.center_x_spin.setToolTip("x coordinate of Center Of Vision as percentage of canvas width")
+        self.center_x_spin.setToolTip("x coordinate of the Center of Vision as percentage of canvas width")
         self.center_x_spin.valueChanged.connect(self.request_preview)
         center_x_label = QLabel("x")
         center_x_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -48,7 +48,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.center_y_spin.setRange(-50.0, 150.0)
         self.center_y_spin.setValue(self.params['center_y'])
         self.center_y_spin.setSuffix("%")
-        self.center_y_spin.setToolTip("y coordinate of Center Of Vision as percentage of canvas height")
+        self.center_y_spin.setToolTip("y coordinate of the Center of Vision as percentage of canvas height")
         self.center_y_spin.valueChanged.connect(self.request_preview)
         center_y_label = QLabel("y")
         center_y_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -71,7 +71,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.vp1_angle_spin.setValue(self.params['vp1_angle'])
         self.vp1_angle_spin.setSingleStep(5)
         self.vp1_angle_spin.setSuffix("°")
-        self.vp1_angle_spin.setToolTip("Angle from the viewing direction to the left set of grid lines")
+        self.vp1_angle_spin.setToolTip("Angle from the viewing direction to the left vanishing point")
         self.vp1_angle_spin.valueChanged.connect(self.on_vp1_angle_changed)
         form.addRow("LVP angle", self.vp1_angle_spin)
 
@@ -84,7 +84,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.pitch_spin.setValue(self.params['pitch'])
         self.pitch_spin.setSingleStep(5)
         self.pitch_spin.setSuffix("°")
-        self.pitch_spin.setToolTip("Camera pitch")
+        self.pitch_spin.setToolTip("Camera pitch. Controls whether looking up or down")
         self.pitch_spin.valueChanged.connect(self.request_preview)
         form.addRow("Pitch", self.pitch_spin)
 
@@ -93,7 +93,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.roll_spin.setRange(-180.0, 180.0)
         self.roll_spin.setValue(self.params['roll'])
         self.roll_spin.setSuffix("°")
-        self.roll_spin.setToolTip("Camera roll")
+        self.roll_spin.setToolTip("Camera roll. Rotates the whole grid")
         self.roll_spin.valueChanged.connect(self.request_preview)
         form.addRow("Roll", self.roll_spin)
 
@@ -146,7 +146,7 @@ class ThreePointPerspectiveGridDialog(QDialog):
         # Axes through the vision center
         self.show_axes_check = QCheckBox("Axes")
         self.show_axes_check.setChecked(self.params["show_axes"])
-        self.show_axes_check.setToolTip("Horizontal and vertical axes through the vision center")
+        self.show_axes_check.setToolTip("Horizontal and vertical axes through the Center of Vision")
         self.show_axes_check.stateChanged.connect(self.request_preview)
 
         toggles_grid = QGridLayout()
