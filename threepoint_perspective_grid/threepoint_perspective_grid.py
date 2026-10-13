@@ -18,12 +18,12 @@ from krita import Krita, Extension, DoubleSliderSpinBox, SliderSpinBox
 import math, json, copy
 
 class ThreePointPerspectiveGridDialog(QDialog):
-    def __init__(self, params, defaults, preview_callback=None, parent=None):
+    def __init__(self, params, defaults, update_preview_callback=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("3-Point Perspective Grid")
         self.params = params
         self.defaults = defaults
-        self.preview_callback = preview_callback
+        self.update_preview_callback = update_preview_callback
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
         self.preview_timer.timeout.connect(self.emit_preview)
@@ -249,8 +249,8 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.preview_timer.start(16)
 
     def emit_preview(self):
-        if self.isVisible() and self.preview_callback:
-            self.preview_callback(self.get_current_params())
+        if self.isVisible() and self.update_preview_callback:
+            self.update_preview_callback(self.get_current_params())
 
     def restore_geometry(self):
         data = Krita.instance().readSetting("ThreePointPerspectiveGrid", "dialogGeometry", "")
