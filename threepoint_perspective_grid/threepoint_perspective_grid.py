@@ -504,7 +504,7 @@ class ThreePointPerspectiveGridExtension(Extension):
         # Camera rotation: yaw -> pitch -> roll. Negate angles to rotate the camera itself
         R = mat_mat_mul(Rz(-roll), mat_mat_mul(Rx(-pitch), Ry(-vp1_angle)))
 
-        # World grid directions (X-Right, Y-Down, Z-Forward)
+        # World directions (X-Right, Y-Down, Z-Forward)
         D1 = (0, 0, 1)          # forward -> VP1
         D2 = (1, 0, 0)          # right   -> VP2
         D3 = (0, 1, 0)          # down    -> VP3
@@ -527,28 +527,28 @@ class ThreePointPerspectiveGridExtension(Extension):
             ("VP3", D3, True),
             ("VP2", D2, True),
             ("VP1", D1, True),]
-        vp = {name: self.project_direction(D, R, K) for name, D, isShow in d_list if isShow}
+        vps = {name: self.project_direction(D, R, K) for name, D, isShow in d_list if isShow}
 
         lines = {}
 
         # Generate rays for each VP
-        for name, vp_info in vp.items():
-            segments = self.generate_rays_from_vp(vp_info, cx, cy, W, H, density)
+        for name, vp in vps.items():
+            segments = self.generate_rays_from_vp(vp, cx, cy, W, H, density)
             if segments:
                 lines[name] = segments
 
         lines["AXES"] = []
         vision_center = {"is_inf": False, "point": (cx, cy), "dir_2d": None}
-        axis_y = self.generate_line_from_two_vps(vp["VP3"], vision_center, W, H)
+        axis_y = self.generate_line_from_two_vps(vps["VP3"], vision_center, W, H)
         if axis_y and show_axes:
             lines["AXES"].append(axis_y)
 
-        dx, dy = self.direction_from_two_vps(vp["VP1"], vp["VP2"])
+        dx, dy = self.direction_from_two_vps(vps["VP1"], vps["VP2"])
         axis_x = clip_line(cx, cy, dx, dy, 0, 0, W, H)
         if axis_x and show_axes:
             lines["AXES"].append(axis_x)
 
-        horizon_line = self.generate_line_from_two_vps(vp["VP1"], vp["VP2"], W, H)
+        horizon_line = self.generate_line_from_two_vps(vps["VP1"], vps["VP2"], W, H)
         if horizon_line:
             lines["HL"] = [horizon_line]
 
