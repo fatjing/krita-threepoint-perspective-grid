@@ -18,11 +18,12 @@ from krita import Krita, Extension, DoubleSliderSpinBox, SliderSpinBox
 import math, json, copy
 
 class ThreePointPerspectiveGridDialog(QDialog):
-    def __init__(self, params, defaults, update_preview_callback=None, parent=None):
+    def __init__(self, params, defaults, doc, update_preview_callback, parent=None):
         super().__init__(parent)
         self.setWindowTitle("3-Point Perspective Grid")
         self.params = params
         self.defaults = defaults
+        self.doc = doc
         self.update_preview_callback = update_preview_callback
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
@@ -61,8 +62,8 @@ class ThreePointPerspectiveGridDialog(QDialog):
         self.fov_spin.setRange(0.1, 179.9)
         self.fov_spin.setValue(self.params['fov'])
         self.fov_spin.setSuffix("°")
-        self.fov_spin.setToolTip("Diagonal field of view. Spans the canvas from corner to corner")
-        self.fov_spin.valueChanged.connect(self.request_preview)
+        self.set_fov_tooltip(self.params['fov'])
+        self.fov_spin.valueChanged.connect(self.on_fov_changed)
         form.addRow("FOV", self.fov_spin)
 
         # Left vanishing point angle
@@ -241,6 +242,21 @@ class ThreePointPerspectiveGridDialog(QDialog):
         luminance = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
         return "#333333" if luminance > 0.179 else "#f4f4f4"
 
+    def set_fov_tooltip(self, fov_deg):
+        W, H = self.doc.width(), self.doc.height()
+        fov = math.radians(fov_deg)
+        f = (math.hypot(W, H) / 2.0) / math.tan(fov / 2.0)  # focal length
+        h_fov = math.degrees(2.0 * math.atan((W / 2.0) / f))
+        v_fov = math.degrees(2.0 * math.atan((H / 2.0) / f))
+        self.fov_spin.setToolTip(
+            f"Diagonal field of view. Spans the canvas from corner to corner.\n\n"
+            f"Horizontal FOV: {h_fov:.2f}°\n"
+            f"Vertical FOV:   {v_fov:.2f}°")
+
+    def on_fov_changed(self, fov_deg):
+        self.set_fov_tooltip(fov_deg)
+        self.request_preview()
+
     def on_vp1_angle_changed(self, angle):
         self.vp2_label.setText(f"{(90.0 - angle):.2f}°")
         self.request_preview()
@@ -377,7 +393,7 @@ class ThreePointPerspectiveGridExtension(Extension):
             return
 
         main_window = Krita.instance().activeWindow().qwindow()
-        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.update_preview, main_window)
+        self.current_dlg = ThreePointPerspectiveGridDialog(self.params, self.DEFAULT_PARAMS, self.doc, self.update_preview, main_window)
         self.current_dlg.accepted.connect(lambda: self.on_dialog_accepted(self.current_dlg))
         self.current_dlg.rejected.connect(self.on_dialog_rejected)
         self.current_dlg.finished.connect(lambda: self.on_dialog_finished(self.current_dlg))
